@@ -1,6 +1,9 @@
 generator client {
   provider = "prisma-client"
   output   = "../lib/generated/prisma"
+  // "native" cubre la máquina de desarrollo; "rhel-openssl-3.0.x" es el runtime
+  // de las funciones de Vercel. Sin el segundo, el deploy no encuentra el motor.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -64,10 +67,27 @@ model Usuarios {
   ultimoInicioSesion  DateTime?
   rol                 Rol                  @relation(fields: [rol_id], references: [id])
   PasswordResetToken  PasswordResetToken[]
+  codigosAcceso       CodigoAcceso[]
   gruposPropios       Grupo[]              @relation("GruposDelUsuario")
   participaciones     Participante[]       @relation("ParticipacionesDelUsuario")
 
   @@index([rol_id], map: "IX_Usuarios_rol_id")
+}
+
+/// Código de un solo uso que se envía por correo al entrar con contraseña.
+/// Se guarda hasheado: si alguien lee la base, no puede iniciar sesión con él.
+model CodigoAcceso {
+  id         String    @id @default(uuid()) @db.VarChar(36)
+  usuarioId  String    @db.VarChar(36)
+  codigoHash String    @db.VarChar(255)
+  expiraEn   DateTime
+  intentos   Int       @default(0)
+  usadoEn    DateTime?
+  createAt   DateTime  @default(now())
+
+  usuario Usuarios @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId], map: "IX_CodigoAcceso_usuarioId")
 }
 
 model PasswordResetToken {

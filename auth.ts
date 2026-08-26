@@ -16,6 +16,12 @@ import {
 
 import { schemaSignIn, TSchemaSignIn } from "@/lib/shemas";
 import { verificarIdTokenGoogle } from "@/lib/google";
+import {
+  VIGENCIA_MINUTOS,
+  codigoDeAccesoActivo,
+  emitirCodigoAcceso,
+  verificarCodigoAcceso,
+} from "@/lib/codigo-acceso";
 
 // ------------------------------
 // JWT CONFIG
@@ -440,4 +446,185 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
     console.error("loginConGoogle error:", err);
     return { error: "No pudimos iniciar sesión con Google." };
   }
+};
+
+// ------------------------------
+// LOGIN EN DOS PASOS (CÓDIGO POR CORREO)
+// ------------------------------
+const COOKIE_PENDIENTE = "login_pendiente";
+const PROPOSITO_PENDIENTE = "codigo_acceso";
+
+/**
+ * Sesión a medias: la contraseña ya se validó, falta el código del correo.
+ * Va firmada para que el navegador no pueda cambiar de qué usuario se trata.
+ */
+async function guardarPendiente(userId: string) {
+  const token = await new SignJWT({ purpose: PROPOSITO_PENDIENTE })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setExpirationTime(`${VIGENCIA_MINUTOS}m`)
+    .sign(key);
+
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_PENDIENTE, token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: VIGENCIA_MINUTOS * 60,
+  });
+}
+
+async function leerPendiente(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_PENDIENTE)?.value;
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
+    if (payload.purpose !== PROPOSITO_PENDIENTE || typeof payload.sub !== "string") return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+async function borrarPendiente() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_PENDIENTE);
+}
+
+/** Valida usuario + contraseña sin crear sesión. */
+async function credencialesValidas(username: string, password: string) {
+  const user = await prisma.usuarios.findFirst({
+    where: { usuario: username },
+    include: usuarioWithRolArgs.include,
+  });
+
+  if (!user || !toBooleanFlag(user.activo)) return null;
+  if (!(await bcrypt.compare(password, user.contrasena))) return null;
+
+  return user;
+}
+
+type UsuarioConRol = NonNullable<Awaited<ReturnType<typeof credencialesValidas>>>;
+
+/** Emite la cookie de sesión definitiva. Es el único punto donde eso ocurre. */
+async function abrirSesion(user: UsuarioConRol, redirect: string) {
+  const now = new Date();
+  await prisma.usuarios.update({
+    where: { id: user.id },
+    data: { ultimoInicioSesion: now, ultimaActividad: now, estaOnline: true },
+  });
+
+  const payload: UsuarioSesion = {
+    IdUser: user.id,
+    User: user.usuario,
+    Rol: user.rol.nombre,
+    Nombre: user.nombre,
+    FotoUrl: user.fotoUrl,
+    IdRol: user.rol_id,
+    Permiso: user.rol.permisos.map((rp) => rp.permiso.nombre),
+    DebeCambiar: toBooleanFlag(user.DebeCambiarPassword),
+    iss: "your-issuer",
+    aud: "your-audience",
+  };
+
+  await setSessionCookie(await encrypt(payload));
+  await borrarPendiente();
+
+  return {
+    success: "Login OK",
+    redirect: payload.DebeCambiar ? "/reset-password" : redirect,
+  };
+}
+
+/**
+ * Paso 1: valida la contraseña y manda el código de 6 dígitos por correo.
+ * Si el segundo paso está apagado, entra directo como antes.
+ */
+export const iniciarSesionConCodigo = async (
+  credentials: TSchemaSignIn,
+  redirect: string
+) => {
+  const parsed = schemaSignIn.safeParse(credentials);
+  if (!parsed.success) return { error: "Usuario o contraseña inválidos" };
+
+  try {
+    const user = await credencialesValidas(parsed.data.usuario, parsed.data.contrasena);
+    if (!user) return { error: "Usuario o contraseña inválidos" };
+
+    if (!codigoDeAccesoActivo()) {
+      return abrirSesion(user, redirect);
+    }
+
+    const emision = await emitirCodigoAcceso({
+      id: user.id,
+      email: user.email,
+      nombre: user.nombre,
+    });
+
+    if (!emision.ok) return { error: emision.error };
+
+    await guardarPendiente(user.id);
+
+    return { requiereCodigo: true as const, enmascarado: emision.enmascarado };
+  } catch (err) {
+    console.error("iniciarSesionConCodigo error:", err);
+    return { error: "No pudimos iniciar sesión. Intenta de nuevo." };
+  }
+};
+
+/** Paso 2: valida el código y recién ahí abre la sesión. */
+export const confirmarCodigoDeAcceso = async (codigo: string, redirect: string) => {
+  const usuarioId = await leerPendiente();
+  if (!usuarioId) {
+    return { error: "Tu solicitud caducó. Vuelve a iniciar sesión." };
+  }
+
+  try {
+    const verificacion = await verificarCodigoAcceso(usuarioId, codigo);
+    if (!verificacion.ok) return { error: verificacion.error };
+
+    const user = await prisma.usuarios.findUnique({
+      where: { id: usuarioId },
+      include: usuarioWithRolArgs.include,
+    });
+
+    if (!user || !toBooleanFlag(user.activo)) {
+      await borrarPendiente();
+      return { error: "Tu cuenta no está disponible." };
+    }
+
+    return abrirSesion(user, redirect);
+  } catch (err) {
+    console.error("confirmarCodigoDeAcceso error:", err);
+    return { error: "No pudimos validar el código." };
+  }
+};
+
+/** Manda otro código al mismo usuario de la solicitud en curso. */
+export const reenviarCodigoDeAcceso = async () => {
+  const usuarioId = await leerPendiente();
+  if (!usuarioId) return { error: "Tu solicitud caducó. Vuelve a iniciar sesión." };
+
+  const user = await prisma.usuarios.findUnique({
+    where: { id: usuarioId },
+    select: { id: true, email: true, nombre: true, activo: true },
+  });
+
+  if (!user || !toBooleanFlag(user.activo)) {
+    await borrarPendiente();
+    return { error: "Tu cuenta no está disponible." };
+  }
+
+  const emision = await emitirCodigoAcceso(user);
+  if (!emision.ok) return { error: emision.error };
+
+  return { success: "Te mandamos un código nuevo.", enmascarado: emision.enmascarado };
+};
+
+/** Cancela el segundo paso (botón "usar otra cuenta"). */
+export const cancelarCodigoDeAcceso = async () => {
+  await borrarPendiente();
 };

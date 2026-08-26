@@ -2,7 +2,13 @@
 
 "use server";
 
-import { login } from "@/auth";
+import {
+  cancelarCodigoDeAcceso,
+  confirmarCodigoDeAcceso,
+  iniciarSesionConCodigo,
+  login,
+  reenviarCodigoDeAcceso,
+} from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { EmailService, MailPayload } from "@/lib/sendEmail";
 import { generateUserCreatedEmailHtml } from "@/lib/templates/createUserEmail";
@@ -129,18 +135,81 @@ export async function loginWithCredentialsAction(
     usuario = userByEmail.usuario;
   }
 
-  const result = await login({ usuario, contrasena }, "/grupos");
+  const result = await iniciarSesionConCodigo({ usuario, contrasena }, "/grupos");
 
-  if (result.error) {
-    return { ok: false, message: "Usuario/correo o contraseña inválidos." };
+  if ("error" in result && result.error) {
+    // El mensaje del segundo paso (correo no enviado, etc.) sí se muestra tal
+    // cual; el de credenciales se generaliza para no delatar qué usuario existe.
+    const esCredencial = result.error.toLowerCase().includes("contraseña inválid");
+    return {
+      ok: false,
+      message: esCredencial ? "Usuario/correo o contraseña inválidos." : result.error,
+    };
+  }
+
+  if ("requiereCodigo" in result && result.requiereCodigo) {
+    return {
+      ok: false,
+      requiereCodigo: true,
+      correoEnmascarado: result.enmascarado,
+      message: `Te mandamos un código de 6 dígitos a ${result.enmascarado}.`,
+    };
   }
 
   return {
     ok: true,
     message: "Inicio de sesión exitoso.",
-    redirect: result.redirect ?? "/grupos",
+    redirect: ("redirect" in result && result.redirect) || "/grupos",
     // `tareasHoy` queda pendiente: aun no existe un modelo de tareas en Prisma.
   };
+}
+
+/** Paso 2 del login: valida el código que llegó por correo. */
+export async function verificarCodigoAction(
+  _prevState: LoginActionState,
+  formData: FormData,
+): Promise<LoginActionState> {
+  const codigo = formData.get("codigo");
+
+  if (typeof codigo !== "string" || !codigo.trim()) {
+    return { ok: false, requiereCodigo: true, message: "Escribe el código que te llegó." };
+  }
+
+  const result = await confirmarCodigoDeAcceso(codigo, "/grupos");
+
+  if ("error" in result && result.error) {
+    return { ok: false, requiereCodigo: true, message: result.error };
+  }
+
+  return {
+    ok: true,
+    message: "Inicio de sesión exitoso.",
+    redirect: ("redirect" in result && result.redirect) || "/grupos",
+  };
+}
+
+/** Reenvía el código al mismo usuario de la solicitud en curso. */
+export async function reenviarCodigoAction(
+  _prevState: LoginActionState,
+  _formData: FormData,
+): Promise<LoginActionState> {
+  const result = await reenviarCodigoDeAcceso();
+
+  if ("error" in result && result.error) {
+    return { ok: false, requiereCodigo: true, message: result.error };
+  }
+
+  return {
+    ok: false,
+    requiereCodigo: true,
+    correoEnmascarado: "enmascarado" in result ? result.enmascarado : undefined,
+    message: "Te mandamos un código nuevo.",
+  };
+}
+
+/** Sale del paso 2 para volver a la pantalla de contraseña. */
+export async function cancelarCodigoAction() {
+  await cancelarCodigoDeAcceso();
 }
 
 /**
