@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies, headers } from "next/headers";
@@ -13,6 +15,7 @@ import {
 } from "@/app/(public)/reset-password/schema";
 
 import { schemaSignIn, TSchemaSignIn } from "@/lib/shemas";
+import { verificarIdTokenGoogle } from "@/lib/google";
 
 // ------------------------------
 // JWT CONFIG
@@ -307,3 +310,134 @@ async function changePassword(username: string, newPassword: string) {
     return null;
   }
 }
+// ------------------------------
+// LOGIN CON GOOGLE
+// ------------------------------
+/** Rol que recibe quien entra por primera vez con Google. */
+const ROL_GOOGLE = "USUARIO";
+
+/** Deriva un usuario legible del correo y lo desambigua si ya existe. */
+async function usuarioDisponibleDesdeEmail(email: string) {
+  const base =
+    email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "").slice(0, 40) || "usuario";
+
+  let candidato = base;
+  let sufijo = 1;
+
+  while (await prisma.usuarios.findFirst({ where: { usuario: candidato }, select: { id: true } })) {
+    candidato = `${base}${sufijo}`.slice(0, 50);
+    sufijo += 1;
+  }
+
+  return candidato;
+}
+
+/**
+ * Alta/entrada con la cuenta de Google.
+ *
+ * El `credential` es el ID token que devuelve Google Identity Services en el
+ * navegador. Se verifica contra las llaves públicas de Google antes de tocar
+ * la base: nunca confiamos en lo que manda el cliente.
+ *
+ * - Si el `sub` de Google ya está vinculado, entra directo.
+ * - Si no, se vincula a la cuenta que tenga ese correo (solo si Google lo
+ *   reporta verificado, para que nadie reclame un correo ajeno).
+ * - Si tampoco existe, se crea la cuenta con el rol por defecto.
+ */
+export const loginConGoogle = async (credential: string, redirect: string) => {
+  if (typeof credential !== "string" || !credential.trim()) {
+    return { error: "No recibimos la credencial de Google." };
+  }
+
+  let perfil;
+  try {
+    perfil = await verificarIdTokenGoogle(credential);
+  } catch (err) {
+    console.error("Google ID token inválido:", err);
+    return { error: "No pudimos validar tu cuenta de Google. Intenta de nuevo." };
+  }
+
+  if (!perfil.emailVerificado) {
+    return { error: "Tu correo de Google no está verificado." };
+  }
+
+  try {
+    let user = await prisma.usuarios.findUnique({
+      where: { googleSub: perfil.sub },
+      include: usuarioWithRolArgs.include,
+    });
+
+    if (!user) {
+      const porCorreo = await prisma.usuarios.findUnique({ where: { email: perfil.email } });
+
+      if (porCorreo) {
+        // Cuenta creada antes con contraseña: se vincula a Google.
+        user = await prisma.usuarios.update({
+          where: { id: porCorreo.id },
+          data: {
+            googleSub: perfil.sub,
+            nombre: porCorreo.nombre ?? perfil.nombre,
+            fotoUrl: porCorreo.fotoUrl ?? perfil.fotoUrl,
+          },
+          include: usuarioWithRolArgs.include,
+        });
+      } else {
+        const rol = await prisma.rol.findUnique({ where: { nombre: ROL_GOOGLE } });
+        if (!rol) {
+          console.error(`Falta el rol ${ROL_GOOGLE}. Corre: npx prisma db seed`);
+          return { error: "El servidor no está configurado. Intenta más tarde." };
+        }
+
+        user = await prisma.usuarios.create({
+          data: {
+            id: randomUUID(),
+            usuario: await usuarioDisponibleDesdeEmail(perfil.email),
+            email: perfil.email,
+            nombre: perfil.nombre,
+            fotoUrl: perfil.fotoUrl,
+            googleSub: perfil.sub,
+            // Sin contraseña utilizable: se entra por Google o se usa "olvidé mi contraseña".
+            contrasena: await bcrypt.hash(randomUUID(), 10),
+            rol_id: rol.id,
+            activo: true,
+            DebeCambiarPassword: false,
+          },
+          include: usuarioWithRolArgs.include,
+        });
+      }
+    }
+
+    if (!toBooleanFlag(user.activo)) {
+      return { error: "Tu cuenta está desactivada. Contacta a un administrador." };
+    }
+
+    const now = new Date();
+    await prisma.usuarios.update({
+      where: { id: user.id },
+      data: { ultimoInicioSesion: now, ultimaActividad: now, estaOnline: true },
+    });
+
+    const payload: UsuarioSesion = {
+      IdUser: user.id,
+      User: user.usuario,
+      Rol: user.rol.nombre,
+      Nombre: user.nombre,
+      FotoUrl: user.fotoUrl,
+      IdRol: user.rol_id,
+      Permiso: user.rol.permisos.map((rp) => rp.permiso.nombre),
+      DebeCambiar: toBooleanFlag(user.DebeCambiarPassword),
+      iss: "your-issuer",
+      aud: "your-audience",
+    };
+
+    await setSessionCookie(await encrypt(payload));
+
+    return {
+      success: "Login OK",
+      redirect: payload.DebeCambiar ? "/reset-password" : redirect,
+    };
+  } catch (err) {
+    console.error("loginConGoogle error:", err);
+    return { error: "No pudimos iniciar sesión con Google." };
+  }
+};

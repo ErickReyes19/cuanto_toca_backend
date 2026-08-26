@@ -53,6 +53,8 @@ model Usuarios {
   direccion           String?              @db.VarChar(255)
   DebeCambiarPassword Boolean?
   email               String               @unique
+  /// Identificador estable de Google (claim `sub`). Se llena al entrar con Google.
+  googleSub           String?              @unique @db.VarChar(64)
   createAt            DateTime             @default(now())
   updateAt            DateTime             @updatedAt
   rol_id              String               @db.VarChar(36)

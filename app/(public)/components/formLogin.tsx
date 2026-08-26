@@ -1,83 +1,104 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { Eye, EyeOff, KeyRound, Loader2, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
+
+import { saveLoginTasksToast } from "@/components/login-tasks-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, KeyRound, UserRound } from "lucide-react";
-import { saveLoginTasksToast } from "@/components/login-tasks-toast";
 import { loginWithCredentialsAction } from "../actions";
 import { initialLoginState } from "../state";
 
-function LoginSubmitButton() {
+function BotonEntrar() {
   const { pending } = useFormStatus();
 
   return (
-    <Button className="h-10 w-full rounded-xl font-bold shadow-md shadow-foreground/10" type="submit" disabled={pending}>
-      {pending ? "Ingresando..." : "Ingresar"}
+    <Button className="h-11 w-full rounded-xl text-sm font-semibold" type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="size-4 animate-spin" /> Entrando...
+        </>
+      ) : (
+        "Entrar"
+      )}
     </Button>
   );
 }
 
 export default function Login() {
   const router = useRouter();
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginState, loginAction] = useActionState(loginWithCredentialsAction, initialLoginState);
+  const [verPassword, setVerPassword] = useState(false);
+  const [estado, accion] = useActionState(loginWithCredentialsAction, initialLoginState);
 
   useEffect(() => {
-    if (loginState.ok && loginState.redirect) {
-      if ((loginState.tareasHoy ?? 0) > 0) {
-        saveLoginTasksToast(loginState.tareasHoy ?? 0);
-      }
-      router.push(loginState.redirect);
+    if (estado.ok && estado.redirect) {
+      if ((estado.tareasHoy ?? 0) > 0) saveLoginTasksToast(estado.tareasHoy ?? 0);
+      router.push(estado.redirect);
     }
-  }, [loginState.ok, loginState.redirect, loginState.tareasHoy, router]);
+  }, [estado.ok, estado.redirect, estado.tareasHoy, router]);
 
   return (
-    <div className="space-y-3">
-      <form action={loginAction} className="space-y-3 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
-          <div className="space-y-2">
-            <label htmlFor="identifier" className="text-sm font-semibold">Usuario o correo</label>
-            <div className="relative">
-              <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="identifier"
-                name="identifier"
-                placeholder="tu_usuario o tu-correo@dominio.com"
-                required
-                className="h-10 rounded-xl border-border/70 bg-background/90 pl-9 focus-visible:ring-2 focus-visible:ring-accent/60"
-              />
-            </div>
-          </div>
+    <form action={accion} className="space-y-4">
+      <div className="space-y-1.5">
+        <label htmlFor="identifier" className="text-sm font-medium">
+          Usuario o correo
+        </label>
+        <div className="relative">
+          <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="identifier"
+            name="identifier"
+            autoComplete="username"
+            placeholder="tu_usuario o tu-correo@dominio.com"
+            required
+            className="h-11 rounded-xl pl-9"
+          />
+        </div>
+      </div>
 
-          <div className="space-y-2">
-            <label htmlFor="contrasena" className="text-sm font-semibold">Contraseña</label>
-            <div className="relative">
-              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="contrasena"
-                name="contrasena"
-                type={showPassword ? "text" : "password"}
-                required
-                className="h-10 rounded-xl border-border/70 bg-background/90 pl-9 pr-10 focus-visible:ring-2 focus-visible:ring-accent/60"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
+      <div className="space-y-1.5">
+        <label htmlFor="contrasena" className="text-sm font-medium">
+          Contraseña
+        </label>
+        <div className="relative">
+          <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="contrasena"
+            name="contrasena"
+            type={verPassword ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="Tu contraseña"
+            required
+            className="h-11 rounded-xl pr-10 pl-9"
+          />
+          <button
+            type="button"
+            onClick={() => setVerPassword((v) => !v)}
+            aria-label={verPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {verPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
+      </div>
 
-          {loginState.message ? (
-            <p className={`text-sm ${loginState.ok ? "text-green-600" : "text-destructive"}`}>{loginState.message}</p>
-          ) : null}
+      {estado.message ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className={`rounded-lg px-3 py-2 text-sm ${
+            estado.ok
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-destructive/10 text-destructive"
+          }`}
+        >
+          {estado.message}
+        </p>
+      ) : null}
 
-          <LoginSubmitButton />
-      </form>
-    </div>
+      <BotonEntrar />
+    </form>
   );
 }

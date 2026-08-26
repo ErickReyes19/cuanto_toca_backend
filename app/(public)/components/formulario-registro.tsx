@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, KeyRound, Mail, UserRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, Mail, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -14,8 +14,14 @@ function BotonRegistro() {
   const { pending } = useFormStatus();
 
   return (
-    <Button className="h-10 w-full rounded-xl font-bold" type="submit" disabled={pending}>
-      {pending ? "Creando cuenta..." : "Crear cuenta gratis"}
+    <Button className="h-11 w-full rounded-xl text-sm font-semibold" type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="size-4 animate-spin" /> Creando cuenta...
+        </>
+      ) : (
+        "Crear cuenta gratis"
+      )}
     </Button>
   );
 }
@@ -30,29 +36,45 @@ export function FormularioRegistro() {
   }, [estado.ok, estado.redirect, router]);
 
   return (
-    <form action={accion} className="space-y-3">
-      <div className="space-y-2">
-        <label htmlFor="nombre" className="text-sm font-semibold">
+    <form action={accion} className="space-y-4">
+      <div className="space-y-1.5">
+        <label htmlFor="nombre" className="text-sm font-medium">
           Tu nombre
         </label>
         <div className="relative">
           <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id="nombre" name="nombre" placeholder="Ana Ramírez" required maxLength={100} className="h-10 rounded-xl pl-9" />
+          <Input
+            id="nombre"
+            name="nombre"
+            autoComplete="name"
+            placeholder="Ana Ramírez"
+            required
+            maxLength={100}
+            className="h-11 rounded-xl pl-9"
+          />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-semibold">
+      <div className="space-y-1.5">
+        <label htmlFor="email" className="text-sm font-medium">
           Correo
         </label>
         <div className="relative">
           <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id="email" name="email" type="email" placeholder="tu-correo@dominio.com" required className="h-10 rounded-xl pl-9" />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="tu-correo@dominio.com"
+            required
+            className="h-11 rounded-xl pl-9"
+          />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="contrasena" className="text-sm font-semibold">
+      <div className="space-y-1.5">
+        <label htmlFor="contrasena" className="text-sm font-medium">
           Contraseña
         </label>
         <div className="relative">
@@ -61,16 +83,17 @@ export function FormularioRegistro() {
             id="contrasena"
             name="contrasena"
             type={verPassword ? "text" : "password"}
+            autoComplete="new-password"
             required
             minLength={8}
             placeholder="Mínimo 8 caracteres"
-            className="h-10 rounded-xl pr-10 pl-9"
+            className="h-11 rounded-xl pr-10 pl-9"
           />
           <button
             type="button"
             onClick={() => setVerPassword((v) => !v)}
             aria-label={verPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-            className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:text-foreground"
+            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             {verPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
           </button>
@@ -78,7 +101,13 @@ export function FormularioRegistro() {
       </div>
 
       {estado.message && !estado.ok ? (
-        <p className="text-sm text-destructive">{estado.message}</p>
+        <p
+          role="status"
+          aria-live="polite"
+          className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {estado.message}
+        </p>
       ) : null}
 
       <BotonRegistro />
