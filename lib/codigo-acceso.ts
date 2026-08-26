@@ -31,7 +31,16 @@ let yaAvisamosDeLaConfig = false;
  * nombre de la variable se ve igual que "apagado a propósito", y así no.
  */
 export function codigoDeAccesoActivo() {
-  if (process.env.LOGIN_CODIGO_HABILITADO?.trim().toLowerCase() === "false") return false;
+  if (process.env.LOGIN_CODIGO_HABILITADO?.trim().toLowerCase() === "false") {
+    if (!yaAvisamosDeLaConfig) {
+      yaAvisamosDeLaConfig = true;
+      console.warn(
+        "[login] Código por correo APAGADO por LOGIN_CODIGO_HABILITADO=false. " +
+          "Quita esa variable (o ponla en true) para que vuelva a pedir código."
+      );
+    }
+    return false;
+  }
 
   if (resendEstaConfigurado()) return true;
 
@@ -89,6 +98,10 @@ export async function emitirCodigoAcceso(usuario: {
   if (ultimo) {
     const transcurridos = (Date.now() - ultimo.createAt.getTime()) / 1000;
     if (transcurridos < ESPERA_REENVIO_SEGUNDOS) {
+      console.warn(
+        `[login] no se envió código: ya se mandó uno hace ${Math.round(transcurridos)}s ` +
+          `(espera mínima ${ESPERA_REENVIO_SEGUNDOS}s).`
+      );
       return {
         ok: false,
         error: "Ya te mandamos un código hace un momento. Revisa tu correo.",
@@ -128,6 +141,7 @@ export async function emitirCodigoAcceso(usuario: {
     }),
   ]);
 
+  console.info(`[login] código enviado a ${enmascararCorreo(usuario.email)}`);
   return { ok: true, enmascarado: enmascararCorreo(usuario.email) };
 }
 

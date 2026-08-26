@@ -38,23 +38,35 @@ function configuracion() {
 export async function enviarCorreo(correo: CorreoResend) {
   const { apiKey, from } = configuracion();
 
-  const respuesta = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from,
-      to: Array.isArray(correo.to) ? correo.to : [correo.to],
-      subject: correo.subject,
-      html: correo.html,
-      text: correo.text,
-      reply_to: correo.replyTo,
-    }),
-    // Si Resend se queda colgado no dejamos al usuario esperando indefinidamente.
-    signal: AbortSignal.timeout(10_000),
-  });
+  // Timeout con AbortController en vez de AbortSignal.timeout: mismo efecto y
+  // sin depender de una API más nueva que puede no estar en todos los runtimes.
+  const control = new AbortController();
+  const temporizador = setTimeout(() => control.abort(), 10_000);
+
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: Array.isArray(correo.to) ? correo.to : [correo.to],
+        subject: correo.subject,
+        html: correo.html,
+        text: correo.text,
+        // Resend usa snake_case en su API.
+        reply_to: correo.replyTo,
+      }),
+      signal: control.signal,
+      // Nada que cachear en un POST transaccional.
+      cache: "no-store",
+    });
+  } finally {
+    clearTimeout(temporizador);
+  }
 
   if (!respuesta.ok) {
     // El cuerpo de error de Resend trae { name, message }; no incluye la API key.

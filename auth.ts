@@ -555,6 +555,9 @@ export const iniciarSesionConCodigo = async (
     if (!user) return { error: "Usuario o contraseña inválidos" };
 
     if (!codigoDeAccesoActivo()) {
+      console.warn(
+        `[login] ${user.usuario} entró SIN código: el segundo paso está inactivo.`
+      );
       return abrirSesion(user, redirect);
     }
 
