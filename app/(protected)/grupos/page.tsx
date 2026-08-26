@@ -1,4 +1,4 @@
-import { Receipt, Users } from "lucide-react";
+import { Home, MapPinned, Receipt, Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -59,7 +59,7 @@ export default async function GruposPage() {
                     ) : null}
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {grupo.totalParticipantes} integrantes · {grupo.totalGastos} gastos
+                    {grupo.tipo === "DESPENSA_FAMILIAR" ? "Despensa familiar" : "Viajes y reuniones"} · {grupo.totalParticipantes} integrantes · {grupo.totalGastos} gastos
                   </p>
                 </div>
                 <span className="shrink-0 font-semibold tabular-nums">

@@ -23,6 +23,7 @@ import {
   RegistrarPago,
 } from "./components/acciones-grupo";
 import { NuevoGasto } from "./components/nuevo-gasto";
+import { NuevaCompraDespensa } from "./components/nueva-compra-despensa";
 
 export default async function GrupoPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -115,16 +116,20 @@ export default async function GrupoPage({ params }: { params: Promise<{ id: stri
 
       <Card>
         <CardHeader>
-          <CardTitle>Gastos</CardTitle>
-          <CardDescription>Registra quién puso qué y cómo se divide.</CardDescription>
+          <CardTitle>{grupo.tipo === "DESPENSA_FAMILIAR" ? "Tickets de despensa" : "Gastos"}</CardTitle>
+          <CardDescription>{grupo.tipo === "DESPENSA_FAMILIAR" ? "Agrega cada producto y selecciona a quién le corresponde." : "Registra quién puso qué y cómo se divide."}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <NuevoGasto
-            grupoId={grupo.id}
-            moneda={grupo.moneda}
-            participantes={grupo.participantes}
-            categorias={categorias}
-          />
+          {grupo.tipo === "DESPENSA_FAMILIAR" ? (
+            <NuevaCompraDespensa grupoId={grupo.id} moneda={grupo.moneda} participantes={grupo.participantes} />
+          ) : (
+            <NuevoGasto
+              grupoId={grupo.id}
+              moneda={grupo.moneda}
+              participantes={grupo.participantes}
+              categorias={categorias}
+            />
+          )}
 
           {grupo.gastos.length === 0 ? (
             <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
