@@ -5,12 +5,14 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { repartirGasto } from "@/lib/split/reparto";
+import { repartirGasto, repartirIgual } from "@/lib/split/reparto";
 import {
+  CrearCompraDespensaSchema,
   CrearGastoSchema,
   CrearGrupoSchema,
   ImportarGrupoSchema,
   RegistrarPagoSchema,
+  type CrearCompraDespensaInput,
   type CrearGastoInput,
   type CrearGrupoInput,
   type ImportarGrupoInput,
@@ -80,6 +82,7 @@ export async function crearGrupo(input: CrearGrupoInput) {
       nombre: datos.nombre,
       descripcion: datos.descripcion || null,
       moneda: datos.moneda,
+      tipo: datos.tipo,
       codigoInvitacion: await codigoUnico(),
       propietarioId: session.IdUser,
       participantes: {
@@ -121,6 +124,7 @@ export async function obtenerGrupos() {
     nombre: grupo.nombre,
     descripcion: grupo.descripcion,
     moneda: grupo.moneda,
+    tipo: grupo.tipo,
     codigoInvitacion: grupo.codigoInvitacion,
     esPropietario: grupo.propietarioId === session.IdUser,
     totalParticipantes: grupo._count.participantes,
@@ -162,6 +166,7 @@ export async function obtenerGrupo(grupoId: string) {
     nombre: grupo.nombre,
     descripcion: grupo.descripcion,
     moneda: grupo.moneda,
+    tipo: grupo.tipo,
     codigoInvitacion: grupo.codigoInvitacion,
     invitacionActiva: grupo.invitacionActiva,
     esPropietario: grupo.propietarioId === session.IdUser,
@@ -407,6 +412,70 @@ export async function crearGasto(input: CrearGastoInput) {
   revalidatePath(`/grupos/${datos.grupoId}`);
   revalidatePath("/grupos");
   return gasto;
+}
+
+/** Guarda un ticket itemizado y crea un único gasto EXACTO con los totales
+ * por persona. Así las liquidaciones usan el mismo motor de saldos que el
+ * resto de la aplicación, sin que el usuario tenga que sumar el ticket. */
+export async function crearCompraDespensa(input: CrearCompraDespensaInput) {
+  const datos = CrearCompraDespensaSchema.parse(input);
+  const { grupo } = await requerirAcceso(datos.grupoId);
+  if (grupo.tipo !== "DESPENSA_FAMILIAR") {
+    throw new Error("Los tickets itemizados solo están disponibles en grupos de despensa.");
+  }
+
+  const participantes = await prisma.participante.findMany({
+    where: { grupoId: datos.grupoId, activo: true },
+    select: { id: true },
+  });
+  const idsValidos = new Set(participantes.map((p) => p.id));
+  if (!idsValidos.has(datos.pagadoPorId)) throw new Error("Quien pagó no pertenece al grupo.");
+  for (const linea of datos.lineas) {
+    if (new Set(linea.participanteIds).size !== linea.participanteIds.length) {
+      throw new Error("Un producto no puede incluir a la misma persona dos veces.");
+    }
+    if (linea.participanteIds.some((id) => !idsValidos.has(id))) {
+      throw new Error("Un producto incluye a alguien que no está en el grupo.");
+    }
+  }
+
+  const totales = new Map<string, number>();
+  const repartos = datos.lineas.map((linea) => {
+    const montos = repartirIgual(linea.montoCentavos, linea.participanteIds.length);
+    return linea.participanteIds.map((participanteId, indice) => {
+      const montoCentavos = montos[indice];
+      totales.set(participanteId, (totales.get(participanteId) ?? 0) + montoCentavos);
+      return { participanteId, montoCentavos };
+    });
+  });
+  const montoCentavos = datos.lineas.reduce((total, linea) => total + linea.montoCentavos, 0);
+
+  const gastoId = randomUUID();
+  await prisma.$transaction(async (tx) => {
+    await tx.gasto.create({
+      data: {
+        id: gastoId, grupoId: datos.grupoId, descripcion: datos.descripcion,
+        montoCentavos, pagadoPorId: datos.pagadoPorId, tipoReparto: "EXACTO",
+        reparto: { create: [...totales].map(([participanteId, monto]) => ({
+          id: randomUUID(), participanteId, montoCentavos: monto,
+        })) },
+      },
+    });
+    await tx.compraDespensa.create({
+      data: {
+        id: randomUUID(), grupoId: datos.grupoId, gastoId,
+        lineas: { create: datos.lineas.map((linea, indice) => ({
+          id: randomUUID(), descripcion: linea.descripcion, montoCentavos: linea.montoCentavos, orden: indice,
+          reparto: { create: repartos[indice].map((r) => ({ id: randomUUID(), ...r })) },
+        })) },
+      },
+    });
+    await tx.grupo.update({ where: { id: datos.grupoId }, data: { updateAt: new Date() } });
+  });
+
+  revalidatePath(`/grupos/${datos.grupoId}`);
+  revalidatePath("/grupos");
+  return { gastoId };
 }
 
 export async function eliminarGasto(gastoId: string) {
