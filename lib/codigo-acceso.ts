@@ -16,16 +16,41 @@ const MAX_INTENTOS = 5;
 /** Segundos mínimos entre un envío y el siguiente, para no dejar abierto un canal de spam. */
 const ESPERA_REENVIO_SEGUNDOS = 60;
 
+/** Para no repetir el mismo aviso en cada login del mismo proceso. */
+let yaAvisamosDeLaConfig = false;
+
 /**
  * ¿Está activo el segundo paso por correo?
  *
  * Es una llave de apagado a propósito: si Resend se cae o el dominio deja de
  * verificar, `LOGIN_CODIGO_HABILITADO=false` devuelve el login directo en vez
  * de dejar a todo el mundo fuera de su cuenta.
+ *
+ * Pero degradar en silencio es peor que fallar: si falta configuración, lo
+ * decimos en los logs con el nombre exacto de la variable. Un typo en el
+ * nombre de la variable se ve igual que "apagado a propósito", y así no.
  */
 export function codigoDeAccesoActivo() {
   if (process.env.LOGIN_CODIGO_HABILITADO?.trim().toLowerCase() === "false") return false;
-  return resendEstaConfigurado();
+
+  if (resendEstaConfigurado()) return true;
+
+  if (!yaAvisamosDeLaConfig) {
+    yaAvisamosDeLaConfig = true;
+
+    const faltantes = [
+      !process.env.RESEND_API_KEY?.trim() && "RESEND_API_KEY",
+      !process.env.RESEND_FROM?.trim() && "RESEND_FROM",
+    ].filter(Boolean);
+
+    console.warn(
+      `[login] Código por correo DESACTIVADO: falta ${faltantes.join(" y ")}. ` +
+        "Se está entrando solo con contraseña. Revisa el nombre exacto de la " +
+        "variable en tu proveedor de hosting."
+    );
+  }
+
+  return false;
 }
 
 /** 6 dígitos con `randomInt`, que reparte uniforme (un `% 1000000` sesga). */
