@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Home, MapPinned, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -40,6 +40,7 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
 
   const [nombre, setNombre] = React.useState("");
   const [moneda, setMoneda] = React.useState("USD");
+  const [tipo, setTipo] = React.useState<"VIAJE_REUNION" | "DESPENSA_FAMILIAR">("VIAJE_REUNION");
   const [integrante, setIntegrante] = React.useState("");
   // El primero de la lista es siempre quien crea el grupo.
   const [integrantes, setIntegrantes] = React.useState<string[]>([nombreUsuario]);
@@ -70,6 +71,7 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
       const grupo = await crearGrupo({
         nombre: nombre.trim(),
         moneda,
+        tipo,
         participantes: integrantes,
       });
       toast.success("Grupo creado.");
@@ -111,6 +113,18 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
                 maxLength={120}
                 autoFocus
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tipo de grupo</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => setTipo("VIAJE_REUNION")} aria-pressed={tipo === "VIAJE_REUNION"} className={`rounded-lg border p-3 text-left ${tipo === "VIAJE_REUNION" ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
+                  <MapPinned className="mb-1 size-4" /><span className="block text-sm font-medium">Viajes y reuniones</span><span className="text-xs text-muted-foreground">Gastos generales con cuatro formas de dividir.</span>
+                </button>
+                <button type="button" onClick={() => setTipo("DESPENSA_FAMILIAR")} aria-pressed={tipo === "DESPENSA_FAMILIAR"} className={`rounded-lg border p-3 text-left ${tipo === "DESPENSA_FAMILIAR" ? "border-primary bg-primary/5" : "hover:bg-muted"}`}>
+                  <Home className="mb-1 size-4" /><span className="block text-sm font-medium">Despensa familiar</span><span className="text-xs text-muted-foreground">Captura un ticket producto por producto.</span>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1.5">

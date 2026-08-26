@@ -3,6 +3,8 @@ import { z } from "zod";
 import { esMonedaValida } from "@/lib/split/moneda";
 import { TIPOS_REPARTO } from "@/lib/split/tipos";
 
+export const TIPOS_GRUPO = ["VIAJE_REUNION", "DESPENSA_FAMILIAR"] as const;
+
 export const NombreParticipante = z
   .string()
   .trim()
@@ -13,6 +15,7 @@ export const CrearGrupoSchema = z.object({
   nombre: z.string().trim().min(1, "Ponle un nombre al grupo").max(120),
   descripcion: z.string().trim().max(500).optional().or(z.literal("")),
   moneda: z.string().trim().toUpperCase().refine(esMonedaValida, "Moneda no soportada"),
+  tipo: z.enum(TIPOS_GRUPO).default("VIAJE_REUNION"),
   participantes: z
     .array(NombreParticipante)
     .min(1, "Agrega al menos un integrante")
@@ -37,6 +40,24 @@ export const CrearGastoSchema = z.object({
   reparto: z.array(LineaRepartoSchema).min(1, "Selecciona al menos un participante"),
 });
 export type CrearGastoInput = z.infer<typeof CrearGastoSchema>;
+
+
+export const CrearCompraDespensaSchema = z.object({
+  grupoId: z.string().min(1),
+  descripcion: z.string().trim().min(1, "Describe la compra").max(160),
+  pagadoPorId: z.string().min(1, "Indica quién pagó"),
+  lineas: z
+    .array(
+      z.object({
+        descripcion: z.string().trim().min(1, "Describe el producto").max(160),
+        montoCentavos: z.number().int().positive("El monto debe ser mayor a cero"),
+        participanteIds: z.array(z.string().min(1)).min(1, "Selecciona a quién le corresponde el producto"),
+      })
+    )
+    .min(1, "Agrega al menos un producto")
+    .max(300, "Máximo 300 productos por ticket"),
+});
+export type CrearCompraDespensaInput = z.infer<typeof CrearCompraDespensaSchema>;
 
 export const RegistrarPagoSchema = z.object({
   grupoId: z.string().min(1),
