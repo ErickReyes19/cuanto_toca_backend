@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -135,10 +136,12 @@ export const columns: ColumnDef<AppTableFeatures, Usuario>[] = [
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-            <Link href={`/usuarios/${usuario.id}/edit`}>
-              <DropdownMenuItem>Editar</DropdownMenuItem>
-            </Link>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+              <DropdownMenuItem render={<Link href={`/usuarios/${usuario.id}/edit`} />}>
+                Editar
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       );
