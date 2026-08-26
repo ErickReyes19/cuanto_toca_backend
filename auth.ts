@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 import { cookies, headers } from "next/headers";
 import { prisma } from './lib/prisma';
-import type { Prisma } from "./lib/generated/prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import {
   TSchemaResetPassword,

@@ -1,8 +1,9 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
-  // "native" cubre la máquina de desarrollo; "rhel-openssl-3.0.x" es el runtime
-  // de las funciones de Vercel. Sin el segundo, el deploy no encuentra el motor.
+  provider = "prisma-client-js"
+  // Sin `output`: el cliente va a node_modules/.prisma/client. Next lo trata
+  // como paquete externo y no lo bundlea, así que Prisma resuelve bien la ruta
+  // de su motor en runtime. Con un output propio, el bundle le rompe __dirname
+  // y en Vercel falla con "could not locate the Query Engine".
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 

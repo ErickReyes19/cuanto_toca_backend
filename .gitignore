@@ -41,7 +41,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# cliente de Prisma generado (output en prisma/schema.prisma)
-/lib/generated/prisma
 
 /prisma/seed.ts
