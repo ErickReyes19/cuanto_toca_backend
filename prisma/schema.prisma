@@ -88,6 +88,11 @@ model PasswordResetToken {
 // serializa sin problema entre Server y Client Components.
 // ============================================================
 
+enum TipoGrupo {
+  VIAJE_REUNION
+  DESPENSA_FAMILIAR
+}
+
 enum TipoReparto {
   IGUAL // partes iguales entre los participantes seleccionados
   EXACTO // cada quien un monto exacto
@@ -96,23 +101,26 @@ enum TipoReparto {
 }
 
 model Grupo {
-  id               String   @id @default(uuid()) @db.VarChar(36)
-  nombre           String   @db.VarChar(120)
-  descripcion      String?  @db.VarChar(500)
+  id               String    @id @default(uuid()) @db.VarChar(36)
+  nombre           String    @db.VarChar(120)
+  descripcion      String?   @db.VarChar(500)
+  /// Define la experiencia del grupo: gastos libres o tickets itemizados.
+  tipo             TipoGrupo @default(VIAJE_REUNION)
   /// ISO 4217: HNL, MXN, COP, ARS, USD...
-  moneda           String   @default("USD") @db.VarChar(3)
+  moneda           String    @default("USD") @db.VarChar(3)
   /// Código corto para el enlace /unirse/[codigo]
-  codigoInvitacion String   @unique @db.VarChar(16)
-  invitacionActiva Boolean  @default(true)
-  archivado        Boolean  @default(false)
-  propietarioId    String   @db.VarChar(36)
-  createAt         DateTime @default(now())
-  updateAt         DateTime @updatedAt
+  codigoInvitacion String    @unique @db.VarChar(16)
+  invitacionActiva Boolean   @default(true)
+  archivado        Boolean   @default(false)
+  propietarioId    String    @db.VarChar(36)
+  createAt         DateTime  @default(now())
+  updateAt         DateTime  @updatedAt
 
-  propietario   Usuarios       @relation("GruposDelUsuario", fields: [propietarioId], references: [id], onDelete: Cascade)
-  participantes Participante[]
-  gastos        Gasto[]
-  pagos         Pago[]
+  propietario     Usuarios         @relation("GruposDelUsuario", fields: [propietarioId], references: [id], onDelete: Cascade)
+  participantes   Participante[]
+  gastos          Gasto[]
+  pagos           Pago[]
+  comprasDespensa CompraDespensa[]
 
   @@index([propietarioId], map: "IX_Grupo_propietarioId")
   @@index([archivado], map: "IX_Grupo_archivado")
@@ -130,12 +138,13 @@ model Participante {
   createAt  DateTime @default(now())
   updateAt  DateTime @updatedAt
 
-  grupo           Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
-  usuario         Usuarios?            @relation("ParticipacionesDelUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
-  gastosPagados   Gasto[]              @relation("GastoPagadoPor")
-  participaciones GastoParticipacion[]
-  pagosEnviados   Pago[]               @relation("PagoEmisor")
-  pagosRecibidos  Pago[]               @relation("PagoReceptor")
+  grupo                   Grupo                        @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  usuario                 Usuarios?                    @relation("ParticipacionesDelUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  gastosPagados           Gasto[]                      @relation("GastoPagadoPor")
+  participaciones         GastoParticipacion[]
+  participacionesDespensa LineaDespensaParticipacion[]
+  pagosEnviados           Pago[]                       @relation("PagoEmisor")
+  pagosRecibidos          Pago[]                       @relation("PagoReceptor")
 
   @@unique([grupoId, usuarioId], map: "UQ_Participante_grupo_usuario")
   @@index([grupoId], map: "IX_Participante_grupoId")
@@ -169,15 +178,62 @@ model Gasto {
   createAt      DateTime    @default(now())
   updateAt      DateTime    @updatedAt
 
-  grupo     Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
-  categoria CategoriaGasto?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  pagadoPor Participante         @relation("GastoPagadoPor", fields: [pagadoPorId], references: [id], onDelete: Cascade)
-  reparto   GastoParticipacion[]
+  grupo          Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  categoria      CategoriaGasto?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  pagadoPor      Participante         @relation("GastoPagadoPor", fields: [pagadoPorId], references: [id], onDelete: Cascade)
+  reparto        GastoParticipacion[]
+  compraDespensa CompraDespensa?
 
   @@index([grupoId], map: "IX_Gasto_grupoId")
   @@index([pagadoPorId], map: "IX_Gasto_pagadoPorId")
   @@index([categoriaId], map: "IX_Gasto_categoriaId")
   @@index([grupoId, fecha], map: "IX_Gasto_grupo_fecha")
+}
+
+/// Ticket de supermercado. Su gasto asociado concentra el reparto total para
+/// que los saldos y las liquidaciones existentes sigan funcionando sin cambios.
+model CompraDespensa {
+  id       String   @id @default(uuid()) @db.VarChar(36)
+  grupoId  String   @db.VarChar(36)
+  gastoId  String   @unique @db.VarChar(36)
+  createAt DateTime @default(now())
+  updateAt DateTime @updatedAt
+
+  grupo  Grupo           @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  gasto  Gasto           @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  lineas LineaDespensa[]
+
+  @@index([grupoId], map: "IX_CompraDespensa_grupoId")
+}
+
+/// Producto o bloque del ticket. Cada línea se distribuye a partes iguales
+/// entre los integrantes indicados, incluyendo correctamente artículos
+/// personales y artículos compartidos.
+model LineaDespensa {
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  compraId      String   @db.VarChar(36)
+  descripcion   String   @db.VarChar(160)
+  montoCentavos Int
+  orden         Int
+  createAt      DateTime @default(now())
+
+  compra  CompraDespensa               @relation(fields: [compraId], references: [id], onDelete: Cascade)
+  reparto LineaDespensaParticipacion[]
+
+  @@index([compraId], map: "IX_LineaDespensa_compraId")
+}
+
+model LineaDespensaParticipacion {
+  id             String @id @default(uuid()) @db.VarChar(36)
+  lineaId        String @db.VarChar(36)
+  participanteId String @db.VarChar(36)
+  montoCentavos  Int
+
+  linea        LineaDespensa @relation(fields: [lineaId], references: [id], onDelete: Cascade)
+  participante Participante  @relation(fields: [participanteId], references: [id], onDelete: Cascade)
+
+  @@unique([lineaId, participanteId], map: "UQ_LineaDespensa_participante")
+  @@index([participanteId], map: "IX_LineaDespensaParticipacion_participanteId")
 }
 
 /// Cuánto le corresponde de un gasto a cada participante.
