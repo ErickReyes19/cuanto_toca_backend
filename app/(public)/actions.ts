@@ -4,10 +4,13 @@
 
 import {
   cancelarCodigoDeAcceso,
+  cancelarRegistro,
   confirmarCodigoDeAcceso,
+  confirmarRegistroConCodigo,
+  iniciarRegistroConCodigo,
   iniciarSesionConCodigo,
-  login,
   reenviarCodigoDeAcceso,
+  reenviarCodigoRegistro,
 } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { EmailService, MailPayload } from "@/lib/sendEmail";
@@ -236,40 +239,75 @@ export async function registrarUsuario(
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return { ok: false, message: "El correo no es válido." };
     if (contrasena.length < 8) return { ok: false, message: "La contraseña debe tener al menos 8 caracteres." };
 
-    const existente = await prisma.usuarios.findUnique({ where: { email: correo } });
-    if (existente) return { ok: false, message: "Ese correo ya tiene una cuenta. Inicia sesión." };
+    const resultado = await iniciarRegistroConCodigo(
+        { nombre: nombreLimpio, email: correo, contrasena },
+        "/grupos",
+    );
 
-    const rol = await prisma.rol.findUnique({ where: { nombre: ROL_POR_DEFECTO } });
-    if (!rol) {
-        console.error(`Falta el rol ${ROL_POR_DEFECTO}. Corre: npx prisma db seed`);
-        return { ok: false, message: "El servidor no está configurado. Intenta más tarde." };
+    if ("error" in resultado && resultado.error) {
+        return { ok: false, message: resultado.error };
     }
 
-    // El usuario se deriva del correo y se desambigua si ya existe.
-    let usuario = buildUsernameFromEmail(correo);
-    let sufijo = 1;
-    while (await prisma.usuarios.findFirst({ where: { usuario } })) {
-        usuario = `${buildUsernameFromEmail(correo)}${sufijo}`.slice(0, 50);
-        sufijo += 1;
+    if ("requiereCodigo" in resultado && resultado.requiereCodigo) {
+        return {
+            ok: false,
+            requiereCodigo: true,
+            correoEnmascarado: resultado.enmascarado,
+            message: `Te mandamos un código de 6 dígitos a ${resultado.enmascarado}.`,
+        };
     }
 
-    await prisma.usuarios.create({
-        data: {
-            id: randomUUID(),
-            usuario,
-            email: correo,
-            nombre: nombreLimpio,
-            contrasena: await bcrypt.hash(contrasena, 10),
-            rol_id: rol.id,
-            activo: true,
-            DebeCambiarPassword: false,
-        },
-    });
+    return {
+        ok: true,
+        message: "¡Listo!",
+        redirect: ("redirect" in resultado && resultado.redirect) || "/grupos",
+    };
+}
 
-    const resultado = await login({ usuario, contrasena }, "/grupos");
-    if (resultado.error) {
-        return { ok: false, message: "Cuenta creada, pero no se pudo iniciar sesión. Entra manualmente." };
+/** Paso 2 del registro: con el código correcto se crea la cuenta. */
+export async function verificarCodigoRegistroAction(
+    _prevState: LoginActionState,
+    formData: FormData,
+): Promise<LoginActionState> {
+    const codigo = formData.get("codigo");
+
+    if (typeof codigo !== "string" || !codigo.trim()) {
+        return { ok: false, requiereCodigo: true, message: "Escribe el código que te llegó." };
     }
 
-    return { ok: true, message: "¡Listo!", redirect: "/grupos" };
+    const resultado = await confirmarRegistroConCodigo(codigo, "/grupos");
+
+    if ("error" in resultado && resultado.error) {
+        return { ok: false, requiereCodigo: true, message: resultado.error };
+    }
+
+    return {
+        ok: true,
+        message: "¡Listo!",
+        redirect: ("redirect" in resultado && resultado.redirect) || "/grupos",
+    };
+}
+
+/** Reenvía el código del registro en curso. */
+export async function reenviarCodigoRegistroAction(
+    _prevState: LoginActionState,
+    _formData: FormData,
+): Promise<LoginActionState> {
+    const resultado = await reenviarCodigoRegistro();
+
+    if ("error" in resultado && resultado.error) {
+        return { ok: false, requiereCodigo: true, message: resultado.error };
+    }
+
+    return {
+        ok: false,
+        requiereCodigo: true,
+        correoEnmascarado: "enmascarado" in resultado ? resultado.enmascarado : undefined,
+        message: "Te mandamos un código nuevo.",
+    };
+}
+
+/** Descarta el registro a medias para volver al formulario. */
+export async function cancelarRegistroAction() {
+    await cancelarRegistro();
 }

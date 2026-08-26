@@ -12,9 +12,9 @@ import {
 /** Minutos de vigencia del código. */
 export const VIGENCIA_MINUTOS = 10;
 /** Intentos fallidos antes de invalidar el código y obligar a pedir otro. */
-const MAX_INTENTOS = 5;
+export const MAX_INTENTOS = 5;
 /** Segundos mínimos entre un envío y el siguiente, para no dejar abierto un canal de spam. */
-const ESPERA_REENVIO_SEGUNDOS = 60;
+export const ESPERA_REENVIO_SEGUNDOS = 60;
 
 /** Para no repetir el mismo aviso en cada login del mismo proceso. */
 let yaAvisamosDeLaConfig = false;
@@ -63,8 +63,22 @@ export function codigoDeAccesoActivo() {
 }
 
 /** 6 dígitos con `randomInt`, que reparte uniforme (un `% 1000000` sesga). */
-function generarCodigo() {
+export function generarCodigo() {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/** Manda el código. Lo comparten el login y el registro. */
+export async function enviarCodigoPorCorreo(
+  email: string,
+  nombre: string | null,
+  codigo: string
+) {
+  await enviarCorreo({
+    to: email,
+    subject: `${codigo} es tu código para entrar a Cuánto Toca`,
+    html: generarCodigoAccesoEmailHtml(nombre ?? "", codigo, VIGENCIA_MINUTOS),
+    text: generarCodigoAccesoEmailTexto(codigo, VIGENCIA_MINUTOS),
+  });
 }
 
 /** `ana.perez@dominio.com` -> `an•••••@dominio.com`, para confirmar a dónde fue sin exponerlo. */
@@ -115,12 +129,7 @@ export async function emitirCodigoAcceso(usuario: {
   // Se envía primero y se guarda después: si el correo falla, no dejamos un
   // código huérfano que invalide el anterior sin que a nadie le llegue nada.
   try {
-    await enviarCorreo({
-      to: usuario.email,
-      subject: `${codigo} es tu código para entrar a Cuánto Toca`,
-      html: generarCodigoAccesoEmailHtml(usuario.nombre ?? "", codigo, VIGENCIA_MINUTOS),
-      text: generarCodigoAccesoEmailTexto(codigo, VIGENCIA_MINUTOS),
-    });
+    await enviarCodigoPorCorreo(usuario.email, usuario.nombre, codigo);
   } catch (error) {
     console.error("No se pudo enviar el código de acceso:", error);
     return { ok: false, error: "No pudimos enviarte el código. Intenta de nuevo en un momento." };

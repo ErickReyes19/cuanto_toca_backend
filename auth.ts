@@ -17,6 +17,11 @@ import {
 import { schemaSignIn, TSchemaSignIn } from "@/lib/shemas";
 import { verificarIdTokenGoogle } from "@/lib/google";
 import {
+  confirmarRegistroPendiente,
+  descartarRegistroPendiente,
+  emitirRegistroPendiente,
+} from "@/lib/registro-pendiente";
+import {
   VIGENCIA_MINUTOS,
   codigoDeAccesoActivo,
   emitirCodigoAcceso,
@@ -319,8 +324,8 @@ async function changePassword(username: string, newPassword: string) {
 // ------------------------------
 // LOGIN CON GOOGLE
 // ------------------------------
-/** Rol que recibe quien entra por primera vez con Google. */
-const ROL_GOOGLE = "USUARIO";
+/** Rol que recibe toda cuenta nueva, venga de Google o del registro por correo. */
+const ROL_POR_DEFECTO = "USUARIO";
 
 /** Deriva un usuario legible del correo y lo desambigua si ya existe. */
 async function usuarioDisponibleDesdeEmail(email: string) {
@@ -388,9 +393,9 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
           include: usuarioWithRolArgs.include,
         });
       } else {
-        const rol = await prisma.rol.findUnique({ where: { nombre: ROL_GOOGLE } });
+        const rol = await prisma.rol.findUnique({ where: { nombre: ROL_POR_DEFECTO } });
         if (!rol) {
-          console.error(`Falta el rol ${ROL_GOOGLE}. Corre: npx prisma db seed`);
+          console.error(`Falta el rol ${ROL_POR_DEFECTO}. Corre: npx prisma db seed`);
           return { error: "El servidor no está configurado. Intenta más tarde." };
         }
 
@@ -630,4 +635,173 @@ export const reenviarCodigoDeAcceso = async () => {
 /** Cancela el segundo paso (botón "usar otra cuenta"). */
 export const cancelarCodigoDeAcceso = async () => {
   await borrarPendiente();
+};
+
+// ------------------------------
+// REGISTRO VERIFICADO POR CORREO
+// ------------------------------
+const COOKIE_REGISTRO = "registro_pendiente";
+const PROPOSITO_REGISTRO = "registro";
+
+async function guardarRegistroEnCurso(email: string) {
+  const token = await new SignJWT({ purpose: PROPOSITO_REGISTRO, email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${VIGENCIA_MINUTOS}m`)
+    .sign(key);
+
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_REGISTRO, token, {
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    maxAge: VIGENCIA_MINUTOS * 60,
+  });
+}
+
+async function leerRegistroEnCurso(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_REGISTRO)?.value;
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
+    if (payload.purpose !== PROPOSITO_REGISTRO || typeof payload.email !== "string") return null;
+    return payload.email;
+  } catch {
+    return null;
+  }
+}
+
+async function borrarRegistroEnCurso() {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_REGISTRO);
+}
+
+/** Crea la cuenta ya con la contraseña hasheada y abre sesión. */
+async function crearCuenta(datos: {
+  nombre: string;
+  email: string;
+  contrasenaHash: string;
+}) {
+  const rol = await prisma.rol.findUnique({ where: { nombre: ROL_POR_DEFECTO } });
+  if (!rol) {
+    console.error(`Falta el rol ${ROL_POR_DEFECTO}. Corre: npx prisma db seed`);
+    return null;
+  }
+
+  await prisma.usuarios.create({
+    data: {
+      id: randomUUID(),
+      usuario: await usuarioDisponibleDesdeEmail(datos.email),
+      email: datos.email,
+      nombre: datos.nombre,
+      contrasena: datos.contrasenaHash,
+      rol_id: rol.id,
+      activo: true,
+      DebeCambiarPassword: false,
+    },
+  });
+
+  return prisma.usuarios.findUnique({
+    where: { email: datos.email },
+    include: usuarioWithRolArgs.include,
+  });
+}
+
+/**
+ * Paso 1 del registro: valida, manda el código y NO crea la cuenta todavía.
+ * Los datos quedan en `RegistroPendiente` hasta que se compruebe el correo.
+ */
+export const iniciarRegistroConCodigo = async (
+  datos: { nombre: string; email: string; contrasena: string },
+  redirect: string
+) => {
+  try {
+    const existente = await prisma.usuarios.findUnique({ where: { email: datos.email } });
+    if (existente) return { error: "Ese correo ya tiene una cuenta. Inicia sesión." };
+
+    // Con el segundo paso apagado, el registro se comporta como antes.
+    if (!codigoDeAccesoActivo()) {
+      console.warn("[registro] cuenta creada SIN verificar el correo: el código está inactivo.");
+
+      const user = await crearCuenta({
+        nombre: datos.nombre,
+        email: datos.email,
+        contrasenaHash: await bcrypt.hash(datos.contrasena, 10),
+      });
+
+      if (!user) return { error: "El servidor no está configurado. Intenta más tarde." };
+      return abrirSesion(user, redirect);
+    }
+
+    const emision = await emitirRegistroPendiente({
+      nombre: datos.nombre,
+      email: datos.email,
+      contrasenaHash: await bcrypt.hash(datos.contrasena, 10),
+    });
+    if (!emision.ok) return { error: emision.error };
+
+    await guardarRegistroEnCurso(datos.email);
+
+    return { requiereCodigo: true as const, enmascarado: emision.enmascarado };
+  } catch (err) {
+    console.error("iniciarRegistroConCodigo error:", err);
+    return { error: "No pudimos crear tu cuenta. Intenta de nuevo." };
+  }
+};
+
+/** Paso 2 del registro: con el código correcto recién se crea la cuenta. */
+export const confirmarRegistroConCodigo = async (codigo: string, redirect: string) => {
+  const email = await leerRegistroEnCurso();
+  if (!email) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+
+  try {
+    const confirmacion = await confirmarRegistroPendiente(email, codigo);
+    if (!confirmacion.ok) return { error: confirmacion.error };
+
+    // Alguien pudo registrar ese correo mientras tanto.
+    const existente = await prisma.usuarios.findUnique({ where: { email } });
+    if (existente) {
+      await borrarRegistroEnCurso();
+      return { error: "Ese correo ya tiene una cuenta. Inicia sesión." };
+    }
+
+    const user = await crearCuenta(confirmacion);
+    if (!user) return { error: "El servidor no está configurado. Intenta más tarde." };
+
+    await borrarRegistroEnCurso();
+    console.info(`[registro] cuenta creada y correo verificado: ${user.usuario}`);
+
+    return abrirSesion(user, redirect);
+  } catch (err) {
+    console.error("confirmarRegistroConCodigo error:", err);
+    return { error: "No pudimos completar tu registro." };
+  }
+};
+
+/** Manda otro código al correo del registro en curso. */
+export const reenviarCodigoRegistro = async () => {
+  const email = await leerRegistroEnCurso();
+  if (!email) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+
+  const pendiente = await prisma.registroPendiente.findUnique({ where: { email } });
+  if (!pendiente) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+
+  const emision = await emitirRegistroPendiente({
+    nombre: pendiente.nombre,
+    email,
+    // Se conserva el hash que ya estaba guardado: el reenvío solo cambia el código.
+    contrasenaHash: pendiente.contrasenaHash,
+  });
+
+  if (!emision.ok) return { error: emision.error };
+  return { success: "Te mandamos un código nuevo.", enmascarado: emision.enmascarado };
+};
+
+/** Cancela el registro a medias y borra lo guardado. */
+export const cancelarRegistro = async () => {
+  const email = await leerRegistroEnCurso();
+  if (email) await descartarRegistroPendiente(email);
+  await borrarRegistroEnCurso();
 };

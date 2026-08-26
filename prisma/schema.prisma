@@ -75,6 +75,21 @@ model Usuarios {
   @@index([rol_id], map: "IX_Usuarios_rol_id")
 }
 
+/// Registro a medias: la cuenta NO existe hasta que se verifica el correo.
+/// Sin esto, cualquiera crea usuarios reales con direcciones que no controla.
+model RegistroPendiente {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  email          String   @unique
+  nombre         String   @db.VarChar(100)
+  /// La contraseña ya viene hasheada: nunca se guarda en claro, ni de paso.
+  contrasenaHash String   @db.VarChar(255)
+  codigoHash     String   @db.VarChar(255)
+  expiraEn       DateTime
+  intentos       Int      @default(0)
+  createAt       DateTime @default(now())
+  updateAt       DateTime @updatedAt
+}
+
 /// Código de un solo uso que se envía por correo al entrar con contraseña.
 /// Se guarda hasheado: si alguien lee la base, no puede iniciar sesión con él.
 model CodigoAcceso {
