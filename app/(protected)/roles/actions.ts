@@ -1,0 +1,237 @@
+
+"use server";
+import { getSession } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { randomUUID } from "crypto";
+import { revalidatePath } from "next/cache";
+import { PermisosRol, Rol as RolDTO } from "./schema";
+
+const ROLES_BASE_PROTEGIDOS = new Set(["SUPER_ADMIN", "ADMINISTRADOR", "USUARIO"]);
+
+function normalizarNombreRol(nombre: string) {
+  return nombre.trim().toUpperCase();
+}
+
+function esRolBaseProtegido(nombre: string) {
+  return ROLES_BASE_PROTEGIDOS.has(normalizarNombreRol(nombre));
+}
+
+export async function getRolesPermisos(): Promise<RolDTO[]> {
+  try {
+    const roles = await prisma.rol.findMany({
+      include: {
+        permisos: {
+          include: {
+            permiso: true,
+          },
+        },
+      },
+    });
+
+    // Mapear al DTO
+    return roles.filter((r) => r.activo).map((r) => ({
+      id: r.id,
+      nombre: r.nombre,
+      descripcion: r.descripcion,
+      activo: r.activo,
+      permisos: r.permisos.map((rp): PermisosRol => ({
+        id: rp.permiso.id,
+        nombre: rp.permiso.nombre,
+      })),
+    }));
+  } catch (error) {
+    console.error("Error al obtener los roles y permisos:", error);
+    return [];
+  }
+}
+
+export async function getRolesPermisosActivos(): Promise<RolDTO[]> {
+  try {
+    const roles = await prisma.rol.findMany({
+      include: {
+        permisos: {
+          include: {
+            permiso: true,
+          },
+        },
+      },
+    });
+
+    // Mapear al DTO
+    return roles.filter((r) => r.activo).map((r) => ({
+      id: r.id,
+      nombre: r.nombre,
+      descripcion: r.descripcion,
+      activo: r.activo,
+      permisos: r.permisos.map((rp): PermisosRol => ({
+        id: rp.permiso.id,
+        nombre: rp.permiso.nombre,
+      })),
+    }));
+  } catch (error) {
+    console.error("Error al obtener los roles y permisos:", error);
+    return [];
+  }
+}
+
+export async function putRol({ rol }: { rol: RolDTO }): Promise<RolDTO | null> {
+  // Preparamos los nuevos permisos para crear las filas intermedias
+  const permisosCreate = rol.permisos.map((p: PermisosRol) => ({
+    permiso: { connect: { id: p.id } },
+  }));
+
+  try {
+    const rolActual = await prisma.rol.findUnique({
+      where: { id: rol.id! },
+      select: { nombre: true },
+    });
+
+    if (!rolActual) return null;
+
+    const esProtegido = esRolBaseProtegido(rolActual.nombre);
+
+    const updated = await prisma.rol.update({
+      where: { id: rol.id! },
+      data: {
+        nombre: esProtegido ? rolActual.nombre : rol.nombre,
+        descripcion: rol.descripcion,
+        activo: esProtegido ? true : rol.activo ?? true,
+        permisos: {
+          // 1) Eliminamos todas las filas RolPermiso existentes
+          deleteMany: {},
+          // 2) Creamos las nuevas relaciones
+          create: permisosCreate,
+        },
+      },
+      include: {
+        permisos: {
+          include: {
+            permiso: true,
+          },
+        },
+      },
+    });
+
+    revalidatePath("/roles");
+    revalidatePath("/usuarios");
+
+    // Mapear la respuesta de Prisma a tu DTO
+    return {
+      id: updated.id,
+      nombre: updated.nombre,
+      descripcion: updated.descripcion,
+      activo: updated.activo,
+      permisos: updated.permisos.map((rp) => ({
+        id: rp.permiso.id,
+        nombre: rp.permiso.nombre,
+      })),
+    };
+  } catch (error) {
+    console.error("Error al actualizar el rol:", error);
+    return null;
+  }
+}
+
+
+
+export async function getRolPermisoById(id: string): Promise<RolDTO | null> {
+  try {
+    const rol = await prisma.rol.findUnique({
+      where: { id },
+      include: {
+        permisos: {
+          include: {
+            permiso: true,
+          },
+        },
+      },
+    });
+
+    if (!rol) {
+      return null;
+    }
+
+    return {
+      id: rol.id,
+      nombre: rol.nombre,
+      descripcion: rol.descripcion,
+      activo: rol.activo,
+      permisos: rol.permisos.map((rp): PermisosRol => ({
+        id: rp.permiso.id,
+        nombre: rp.permiso.nombre,
+      })),
+    };
+  } catch (error) {
+    console.error("Error al obtener el rol por ID:", error);
+    return null;
+  }
+}
+
+
+export async function postRol({
+  rol,
+}: {
+  rol: RolDTO;
+}): Promise<RolDTO | null> {
+  try {
+    if (esRolBaseProtegido(rol.nombre)) {
+      throw new Error("Los roles base protegidos ya están definidos por el seed");
+    }
+
+    const created = await prisma.rol.create({
+      data: {
+        // Generamos un UUID para el rol
+        id: randomUUID(),
+        nombre: rol.nombre,
+        descripcion: rol.descripcion,
+        activo: rol.activo ?? true,
+        permisos: {
+          create: rol.permisos.map((p: PermisosRol) => ({
+            id: p.id,
+            permiso: { connect: { id: p.id } },
+          })),
+        },
+      },
+      include: {
+        permisos: {
+          include: {
+            permiso: true,
+          },
+        },
+      },
+    });
+
+    revalidatePath("/roles");
+    revalidatePath("/usuarios");
+
+    // Mapeamos a tu DTO RolDTO
+    return {
+      id: created.id,
+      nombre: created.nombre,
+      descripcion: created.descripcion,
+      activo: created.activo,
+      permisos: created.permisos.map((rp) => ({
+        id: rp.permiso.id,
+        nombre: rp.permiso.nombre,
+      })),
+    };
+  } catch (error) {
+    console.error("Error al crear el rol:", error);
+    return null;
+  }
+}
+
+export async function getRolesPermitidosParaFormularioUsuario(): Promise<RolDTO[]> {
+  const session = await getSession();
+  if (!session?.IdUser) return [];
+
+  const esSuperAdmin = session.Rol?.toUpperCase() === "SUPER_ADMIN";
+
+  const roles = await getRolesPermisosActivos();
+  if (esSuperAdmin) {
+    return roles;
+  }
+
+  const bloqueados = new Set(["SUPER_ADMIN", "ADMINISTRADOR"]);
+  return roles.filter((r) => !bloqueados.has(r.nombre.toUpperCase()));
+}

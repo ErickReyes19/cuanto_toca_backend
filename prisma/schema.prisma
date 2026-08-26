@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Permiso {
+  id          String       @id @default(uuid())
+  nombre      String       @unique
+  descripcion String
+  createAt    DateTime     @default(now())
+  updateAt    DateTime     @updatedAt
+  activo      Boolean
+  roles       RolPermiso[]
+}
+
+model RolPermiso {
+  id        String   @id @default(uuid())
+  rolId     String
+  permisoId String
+  createAt  DateTime @default(now())
+
+  permiso Permiso @relation(fields: [permisoId], references: [id])
+  rol     Rol     @relation(fields: [rolId], references: [id])
+
+  @@unique([rolId, permisoId])
+  @@index([permisoId], map: "RolPermiso_permisoId_fkey")
+}
+
+model Rol {
+  id          String       @id @default(uuid())
+  nombre      String       @unique
+  descripcion String
+  createAt    DateTime     @default(now())
+  updateAt    DateTime     @updatedAt
+  activo      Boolean
+  permisos    RolPermiso[]
+  usuarios    Usuarios[]
+}
+
+model Usuarios {
+  id                  String               @id @db.VarChar(36)
+  usuario             String               @db.VarChar(50)
+  contrasena          String               @db.LongText
+  nombre              String?              @db.VarChar(100)
+  fotoUrl             String?              @db.VarChar(512)
+  telefono            String?              @db.VarChar(30)
+  ciudad              String?              @db.VarChar(100)
+  direccion           String?              @db.VarChar(255)
+  DebeCambiarPassword Boolean?
+  email               String               @unique
+  createAt            DateTime             @default(now())
+  updateAt            DateTime             @updatedAt
+  rol_id              String               @db.VarChar(36)
+  activo              Boolean              @db.Bit(1)
+  estaOnline          Boolean?
+  ultimaActividad     DateTime?
+  ultimoInicioSesion  DateTime?
+  rol                 Rol                  @relation(fields: [rol_id], references: [id])
+  PasswordResetToken  PasswordResetToken[]
+  gruposPropios       Grupo[]              @relation("GruposDelUsuario")
+  participaciones     Participante[]       @relation("ParticipacionesDelUsuario")
+
+  @@index([rol_id], map: "IX_Usuarios_rol_id")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  token     String   @unique @db.VarChar(128)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  Usuario Usuarios @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "IX_PasswordResetToken_userId")
+}
+
+// ============================================================
+// DOMINIO: GASTOS COMPARTIDOS
+// ============================================================
+// Los montos se guardan SIEMPRE como enteros en la unidad menor
+// de la moneda (centavos). Evita errores de punto flotante y se
+// serializa sin problema entre Server y Client Components.
+// ============================================================
+
+enum TipoReparto {
+  IGUAL // partes iguales entre los participantes seleccionados
+  EXACTO // cada quien un monto exacto
+  PORCENTAJE // cada quien un % (se guarda en puntos base: 1% = 100)
+  PARTES // por ponderación: 1 parte, 2 partes, etc.
+}
+
+model Grupo {
+  id               String   @id @default(uuid()) @db.VarChar(36)
+  nombre           String   @db.VarChar(120)
+  descripcion      String?  @db.VarChar(500)
+  /// ISO 4217: HNL, MXN, COP, ARS, USD...
+  moneda           String   @default("USD") @db.VarChar(3)
+  /// Código corto para el enlace /unirse/[codigo]
+  codigoInvitacion String   @unique @db.VarChar(16)
+  invitacionActiva Boolean  @default(true)
+  archivado        Boolean  @default(false)
+  propietarioId    String   @db.VarChar(36)
+  createAt         DateTime @default(now())
+  updateAt         DateTime @updatedAt
+
+  propietario   Usuarios       @relation("GruposDelUsuario", fields: [propietarioId], references: [id], onDelete: Cascade)
+  participantes Participante[]
+  gastos        Gasto[]
+  pagos         Pago[]
+
+  @@index([propietarioId], map: "IX_Grupo_propietarioId")
+  @@index([archivado], map: "IX_Grupo_archivado")
+}
+
+/// Integrante de un grupo. Puede ser solo un nombre (sin cuenta) o
+/// estar vinculado a un usuario registrado que entró por el enlace.
+model Participante {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  grupoId   String   @db.VarChar(36)
+  nombre    String   @db.VarChar(80)
+  /// Se llena cuando la persona se une con una cuenta real
+  usuarioId String?  @db.VarChar(36)
+  activo    Boolean  @default(true)
+  createAt  DateTime @default(now())
+  updateAt  DateTime @updatedAt
+
+  grupo           Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  usuario         Usuarios?            @relation("ParticipacionesDelUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  gastosPagados   Gasto[]              @relation("GastoPagadoPor")
+  participaciones GastoParticipacion[]
+  pagosEnviados   Pago[]               @relation("PagoEmisor")
+  pagosRecibidos  Pago[]               @relation("PagoReceptor")
+
+  @@unique([grupoId, usuarioId], map: "UQ_Participante_grupo_usuario")
+  @@index([grupoId], map: "IX_Participante_grupoId")
+  @@index([usuarioId], map: "IX_Participante_usuarioId")
+}
+
+model CategoriaGasto {
+  id     String  @id @default(uuid()) @db.VarChar(36)
+  slug   String  @unique @db.VarChar(40)
+  nombre String  @db.VarChar(60)
+  /// Nombre del ícono de lucide-react
+  icono  String  @db.VarChar(40)
+  orden  Int     @default(0)
+  activo Boolean @default(true)
+
+  gastos Gasto[]
+}
+
+model Gasto {
+  id            String      @id @default(uuid()) @db.VarChar(36)
+  grupoId       String      @db.VarChar(36)
+  descripcion   String      @db.VarChar(160)
+  /// Monto total en centavos (unidad menor de la moneda del grupo)
+  montoCentavos Int
+  fecha         DateTime    @default(now())
+  tipoReparto   TipoReparto @default(IGUAL)
+  categoriaId   String?     @db.VarChar(36)
+  /// Participante que puso el dinero
+  pagadoPorId   String      @db.VarChar(36)
+  nota          String?     @db.VarChar(500)
+  createAt      DateTime    @default(now())
+  updateAt      DateTime    @updatedAt
+
+  grupo     Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  categoria CategoriaGasto?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  pagadoPor Participante         @relation("GastoPagadoPor", fields: [pagadoPorId], references: [id], onDelete: Cascade)
+  reparto   GastoParticipacion[]
+
+  @@index([grupoId], map: "IX_Gasto_grupoId")
+  @@index([pagadoPorId], map: "IX_Gasto_pagadoPorId")
+  @@index([categoriaId], map: "IX_Gasto_categoriaId")
+  @@index([grupoId, fecha], map: "IX_Gasto_grupo_fecha")
+}
+
+/// Cuánto le corresponde de un gasto a cada participante.
+/// `montoCentavos` ya viene resuelto y la suma del reparto SIEMPRE
+/// es exactamente igual al monto del gasto (el residuo se reparte).
+model GastoParticipacion {
+  id             String @id @default(uuid()) @db.VarChar(36)
+  gastoId        String @db.VarChar(36)
+  participanteId String @db.VarChar(36)
+  montoCentavos  Int
+  /// Entrada original según el tipo de reparto: partes (PARTES),
+  /// puntos base (PORCENTAJE) o null (IGUAL / EXACTO)
+  pesoEntrada    Int?
+
+  gasto        Gasto        @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  participante Participante @relation(fields: [participanteId], references: [id], onDelete: Cascade)
+
+  @@unique([gastoId, participanteId], map: "UQ_Reparto_gasto_participante")
+  @@index([participanteId], map: "IX_Reparto_participanteId")
+}
+
+/// Liquidación registrada: "Ana ya le pagó 250 a Luis".
+model Pago {
+  id               String   @id @default(uuid()) @db.VarChar(36)
+  grupoId          String   @db.VarChar(36)
+  deParticipanteId String   @db.VarChar(36)
+  aParticipanteId  String   @db.VarChar(36)
+  montoCentavos    Int
+  fecha            DateTime @default(now())
+  nota             String?  @db.VarChar(300)
+  createAt         DateTime @default(now())
+
+  grupo          Grupo        @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  deParticipante Participante @relation("PagoEmisor", fields: [deParticipanteId], references: [id], onDelete: Cascade)
+  aParticipante  Participante @relation("PagoReceptor", fields: [aParticipanteId], references: [id], onDelete: Cascade)
+
+  @@index([grupoId], map: "IX_Pago_grupoId")
+  @@index([deParticipanteId], map: "IX_Pago_deParticipanteId")
+  @@index([aParticipanteId], map: "IX_Pago_aParticipanteId")
+}

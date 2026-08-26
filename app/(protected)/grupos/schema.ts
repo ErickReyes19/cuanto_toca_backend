@@ -1,0 +1,67 @@
+import { z } from "zod";
+
+import { esMonedaValida } from "@/lib/split/moneda";
+import { TIPOS_REPARTO } from "@/lib/split/tipos";
+
+export const NombreParticipante = z
+  .string()
+  .trim()
+  .min(1, "El nombre es requerido")
+  .max(80, "Máximo 80 caracteres");
+
+export const CrearGrupoSchema = z.object({
+  nombre: z.string().trim().min(1, "Ponle un nombre al grupo").max(120),
+  descripcion: z.string().trim().max(500).optional().or(z.literal("")),
+  moneda: z.string().trim().toUpperCase().refine(esMonedaValida, "Moneda no soportada"),
+  participantes: z
+    .array(NombreParticipante)
+    .min(1, "Agrega al menos un integrante")
+    .max(50, "Máximo 50 integrantes por grupo"),
+});
+export type CrearGrupoInput = z.infer<typeof CrearGrupoSchema>;
+
+export const LineaRepartoSchema = z.object({
+  participanteId: z.string().min(1),
+  valor: z.number().int().min(0).optional(),
+});
+
+export const CrearGastoSchema = z.object({
+  grupoId: z.string().min(1),
+  descripcion: z.string().trim().min(1, "Describe el gasto").max(160),
+  montoCentavos: z.number().int().positive("El monto debe ser mayor a cero"),
+  pagadoPorId: z.string().min(1, "Indica quién pagó"),
+  tipoReparto: z.enum(TIPOS_REPARTO),
+  categoriaId: z.string().min(1).nullable().optional(),
+  fecha: z.coerce.date().optional(),
+  nota: z.string().trim().max(500).optional().or(z.literal("")),
+  reparto: z.array(LineaRepartoSchema).min(1, "Selecciona al menos un participante"),
+});
+export type CrearGastoInput = z.infer<typeof CrearGastoSchema>;
+
+export const RegistrarPagoSchema = z.object({
+  grupoId: z.string().min(1),
+  deParticipanteId: z.string().min(1),
+  aParticipanteId: z.string().min(1),
+  montoCentavos: z.number().int().positive("El monto debe ser mayor a cero"),
+  nota: z.string().trim().max(300).optional().or(z.literal("")),
+});
+export type RegistrarPagoInput = z.infer<typeof RegistrarPagoSchema>;
+
+/** Payload que manda la calculadora anónima al guardarse. */
+export const ImportarGrupoSchema = z.object({
+  nombre: z.string().trim().min(1).max(120),
+  moneda: z.string().trim().toUpperCase().refine(esMonedaValida),
+  participantes: z.array(z.object({ id: z.string(), nombre: NombreParticipante })).min(1).max(50),
+  gastos: z
+    .array(
+      z.object({
+        descripcion: z.string().trim().min(1).max(160),
+        montoCentavos: z.number().int().positive(),
+        pagadoPorId: z.string().min(1),
+        categoriaSlug: z.string().optional().nullable(),
+        reparto: z.array(z.object({ participanteId: z.string(), montoCentavos: z.number().int().min(0) })).min(1),
+      })
+    )
+    .max(300),
+});
+export type ImportarGrupoInput = z.infer<typeof ImportarGrupoSchema>;
