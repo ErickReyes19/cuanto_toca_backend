@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 
+import { METADATOS_EXTRA, VERIFICACIONES } from "@/lib/metadatos";
 import { SITIO } from "@/lib/site";
 import "./globals.css";
 
@@ -52,10 +53,9 @@ export const metadata: Metadata = {
     address: false,
     email: false,
   },
-  // Evita que el navegador ofrezca traducir una app que ya está en español.
-  other: {
-    "google": "notranslate",
-  },
+  // Verificaciones y meta tags propios: se editan en lib/metadatos.ts, no aquí.
+  verification: VERIFICACIONES,
+  other: METADATOS_EXTRA,
 };
 
 export const viewport: Viewport = {

@@ -87,11 +87,20 @@ const ETIQUETAS_MONEDA = Object.fromEntries(
   MONEDAS.map((m) => [m.codigo, `${m.codigo} · ${m.nombre}`])
 );
 
-function grupoVacio(moneda: string): GrupoLocal {
-  return { nombre: "", moneda, tipo: "VIAJE_REUNION", participantes: [], gastos: [] };
+function grupoVacio(moneda: string, tipo: TipoGrupoLocal): GrupoLocal {
+  return { nombre: "", moneda, tipo, participantes: [], gastos: [] };
 }
 
-export function Calculadora() {
+/**
+ * @param tipoInicial Con qué tipo arranca si todavía no hay borrador. Las
+ * páginas por caso de uso la montan ya en el modo que corresponde; un borrador
+ * guardado siempre manda sobre esto, para no pisarle el trabajo a nadie.
+ */
+export function Calculadora({
+  tipoInicial = "VIAJE_REUNION",
+}: {
+  tipoInicial?: TipoGrupoLocal;
+} = {}) {
   // El borrador vive en localStorage, no en estado de React: así sobrevive
   // recargas y no hace falta ningún efecto de sincronización.
   const crudo = useAlmacenamientoLocal(CLAVE_BORRADOR);
@@ -102,14 +111,18 @@ export function Calculadora() {
       try {
         const guardado = JSON.parse(crudo) as GrupoLocal;
         if (Array.isArray(guardado?.participantes) && Array.isArray(guardado?.gastos)) {
-          return guardado;
+          // Un borrador sin nada anotado no debe imponer su tipo sobre el de la
+          // página: si entras por "dividir la despensa", esperas ver despensa.
+          // En cuanto hay datos reales, el borrador manda y no se toca.
+          const vacio = guardado.participantes.length === 0 && guardado.gastos.length === 0;
+          return vacio ? { ...guardado, tipo: tipoInicial } : guardado;
         }
       } catch {
         // borrador corrupto: se empieza limpio
       }
     }
-    return grupoVacio(monedaLocal);
-  }, [crudo, monedaLocal]);
+    return grupoVacio(monedaLocal, tipoInicial);
+  }, [crudo, monedaLocal, tipoInicial]);
 
   const setGrupo = React.useCallback(
     (actualizar: (actual: GrupoLocal) => GrupoLocal) => {
@@ -191,7 +204,7 @@ export function Calculadora() {
   }
 
   function limpiarTodo() {
-    setGrupo(() => grupoVacio(moneda));
+    setGrupo(() => grupoVacio(moneda, tipoInicial));
     toast.success("Se borró el cálculo.");
   }
 

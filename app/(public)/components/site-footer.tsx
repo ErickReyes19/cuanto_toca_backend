@@ -1,29 +1,32 @@
 import { Wallet } from "lucide-react";
 import Link from "next/link";
 
+import { CASOS_DE_USO, PAGINAS_LEGALES } from "@/lib/contenido";
+
 const COLUMNAS = [
   {
-    titulo: "Producto",
-    enlaces: [
-      { titulo: "Calculadora", href: "/#calculadora" },
-      { titulo: "Cómo funciona", href: "/#caracteristicas" },
-      { titulo: "Unirse con código", href: "/unirse" },
-    ],
+    titulo: "Cómo dividir",
+    enlaces: CASOS_DE_USO.map((caso) => ({ titulo: caso.enlace, href: caso.ruta })),
   },
   {
     titulo: "Cuenta",
     enlaces: [
+      { titulo: "Calculadora", href: "/#calculadora" },
       { titulo: "Iniciar sesión", href: "/login" },
       { titulo: "Crear cuenta", href: "/registro" },
-      { titulo: "Recuperar contraseña", href: "/forgot-password" },
+      { titulo: "Unirse con código", href: "/unirse" },
     ],
+  },
+  {
+    titulo: "Legal",
+    enlaces: PAGINAS_LEGALES.map((pagina) => ({ titulo: pagina.enlace, href: pagina.ruta })),
   },
 ];
 
 export function SiteFooter() {
   return (
     <footer className="mt-16 border-t bg-muted/30">
-      <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 sm:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Link href="/" className="flex items-center gap-2 font-semibold">
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">

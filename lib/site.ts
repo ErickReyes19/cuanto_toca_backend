@@ -35,9 +35,21 @@ export const SITIO = {
 /** Rutas públicas que sí queremos en el sitemap y abiertas a los buscadores. */
 export const RUTAS_PUBLICAS = [
   { ruta: "/", prioridad: 1, frecuencia: "weekly" as const },
+
+  // Contenido: lo que de verdad puede traer tráfico de búsqueda.
+  { ruta: "/dividir-gastos-de-viaje", prioridad: 0.9, frecuencia: "monthly" as const },
+  { ruta: "/dividir-la-despensa", prioridad: 0.9, frecuencia: "monthly" as const },
+  { ruta: "/dividir-la-cuenta-del-restaurante", prioridad: 0.9, frecuencia: "monthly" as const },
+  { ruta: "/gastos-entre-roommates", prioridad: 0.9, frecuencia: "monthly" as const },
+
   { ruta: "/registro", prioridad: 0.6, frecuencia: "monthly" as const },
-  { ruta: "/login", prioridad: 0.4, frecuencia: "monthly" as const },
   { ruta: "/unirse", prioridad: 0.5, frecuencia: "monthly" as const },
+  { ruta: "/login", prioridad: 0.4, frecuencia: "monthly" as const },
+
+  // Legales: poco tráfico, pero AdSense y los buscadores esperan encontrarlas.
+  { ruta: "/privacidad", prioridad: 0.3, frecuencia: "yearly" as const },
+  { ruta: "/terminos", prioridad: 0.3, frecuencia: "yearly" as const },
+  { ruta: "/contacto", prioridad: 0.4, frecuencia: "yearly" as const },
 ];
 
 /**
