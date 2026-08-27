@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 
 import { getSession } from "@/auth";
+import { GoogleAd } from "@/components/google-ad";
 import { Button } from "@/components/ui/button";
 import { SITIO } from "@/lib/site";
 import { Calculadora } from "./components/calculadora";
@@ -134,6 +135,8 @@ export default async function InicioPage() {
           <section id="calculadora" className="scroll-mt-20">
             <Calculadora />
           </section>
+
+          <GoogleAd slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LANDING} className="mt-10 min-h-0" />
 
           <section id="caracteristicas" className="mt-10 grid scroll-mt-20 gap-4 sm:grid-cols-3">
             <Caracteristica

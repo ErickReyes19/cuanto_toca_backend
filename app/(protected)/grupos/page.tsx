@@ -6,7 +6,7 @@ import { getSession } from "@/auth";
 import HeaderComponent from "@/components/HeaderComponent";
 import { Badge } from "@/components/ui/badge";
 import { formatearMonto } from "@/lib/split/moneda";
-import { obtenerGrupos } from "./actions";
+import { obtenerAmigos, obtenerGrupos } from "./actions";
 import { CrearGrupo } from "./components/crear-grupo";
 import { BotonEliminarGrupo } from "./components/boton-eliminar-grupo";
 import { ImportarBorrador } from "./components/importar-borrador";
@@ -15,7 +15,7 @@ export default async function GruposPage() {
   const session = await getSession();
   if (!session?.IdUser) redirect("/login?next=/grupos");
 
-  const grupos = await obtenerGrupos();
+  const [grupos, amigos] = await Promise.all([obtenerGrupos(), obtenerAmigos()]);
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
@@ -25,7 +25,7 @@ export default async function GruposPage() {
           screenName="Mis grupos"
           description="Cada grupo lleva sus propios gastos y su liquidación."
         />
-        <CrearGrupo nombreUsuario={session.Nombre?.trim() || session.User} />
+        <CrearGrupo nombreUsuario={session.Nombre?.trim() || session.User} amigos={amigos} />
       </div>
 
       <ImportarBorrador />

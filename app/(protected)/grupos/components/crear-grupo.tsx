@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, MapPinned, Plus, Trash2 } from "lucide-react";
+import { Home, MapPinned, Plus, Trash2, UserRoundPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -33,7 +33,9 @@ const ETIQUETAS_MONEDA = Object.fromEntries(
   MONEDAS.map((m) => [m.codigo, `${m.codigo} · ${m.nombre}`])
 );
 
-export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
+type Amigo = { id: string; nombre: string };
+
+export function CrearGrupo({ nombreUsuario, amigos }: { nombreUsuario: string; amigos: Amigo[] }) {
   const router = useRouter();
   const [abierto, setAbierto] = React.useState(false);
   const [enviando, setEnviando] = React.useState(false);
@@ -44,6 +46,7 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
   const [integrante, setIntegrante] = React.useState("");
   // El primero de la lista es siempre quien crea el grupo.
   const [integrantes, setIntegrantes] = React.useState<string[]>([nombreUsuario]);
+  const [amigoIds, setAmigoIds] = React.useState<string[]>([]);
 
   // La moneda se sugiere al abrir el diálogo, no con un efecto: así el
   // usuario puede cambiarla y no se le reescribe sola en cada render.
@@ -73,11 +76,13 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
         moneda,
         tipo,
         participantes: integrantes,
+        amigoIds,
       });
       toast.success("Grupo creado.");
       setAbierto(false);
       setNombre("");
       setIntegrantes([nombreUsuario]);
+      setAmigoIds([]);
       router.push(`/grupos/${grupo.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo crear el grupo.");
@@ -146,6 +151,31 @@ export function CrearGrupo({ nombreUsuario }: { nombreUsuario: string }) {
                 </SelectContent>
               </Select>
             </div>
+
+            {amigos.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Agregar amigos</Label>
+                <p className="text-xs text-muted-foreground">
+                  Se agregan con su cuenta vinculada y podrán ver este grupo de inmediato.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {amigos.map((amigo) => {
+                    const seleccionado = amigoIds.includes(amigo.id);
+                    return (
+                      <Button
+                        key={amigo.id}
+                        type="button"
+                        size="sm"
+                        variant={seleccionado ? "default" : "outline"}
+                        onClick={() => setAmigoIds((actual) => seleccionado ? actual.filter((id) => id !== amigo.id) : [...actual, amigo.id])}
+                      >
+                        <UserRoundPlus className="size-3.5" /> {seleccionado ? "✓ " : ""}{amigo.nombre}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-1.5">
               <Label htmlFor="grupo-integrante">Integrantes</Label>

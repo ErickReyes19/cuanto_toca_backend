@@ -20,6 +20,7 @@ export const CrearGrupoSchema = z.object({
     .array(NombreParticipante)
     .min(1, "Agrega al menos un integrante")
     .max(50, "Máximo 50 integrantes por grupo"),
+  amigoIds: z.array(z.string().min(1)).max(49).default([]),
 });
 export type CrearGrupoInput = z.infer<typeof CrearGrupoSchema>;
 
