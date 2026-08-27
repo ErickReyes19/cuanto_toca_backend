@@ -18,6 +18,12 @@ import {
 import { aUnidadMenor, formatearMonto, getMoneda } from "@/lib/split/moneda";
 import { repartirGasto } from "@/lib/split/reparto";
 import type { TipoReparto } from "@/lib/split/tipos";
+import {
+  SelectorPagadores,
+  resolverPagadores,
+  type Pagador,
+} from "@/components/grupos/selector-pagadores";
+import { validarPagadores } from "@/lib/split/reparto";
 import { crearGasto } from "../../actions";
 import { enviarConEnter } from "@/lib/formulario";
 
@@ -47,7 +53,9 @@ export function NuevoGasto({
 
   const [descripcion, setDescripcion] = React.useState("");
   const [monto, setMonto] = React.useState("");
-  const [pagadoPorId, setPagadoPorId] = React.useState(participantes[0]?.id ?? "");
+  const [pagadores, setPagadores] = React.useState<Pagador[]>(
+    participantes[0] ? [{ participanteId: participantes[0].id, montoCentavos: 0 }] : []
+  );
   const [categoriaId, setCategoriaId] = React.useState<string>("");
   const [tipoReparto, setTipoReparto] = React.useState<TipoReparto>("IGUAL");
   const [entre, setEntre] = React.useState<string[]>(participantes.map((p) => p.id));
@@ -86,8 +94,10 @@ export function NuevoGasto({
 
     if (!descripcion.trim()) return toast.error("Describe el gasto.");
     if (montoCentavos <= 0) return toast.error("Escribe un monto válido.");
-    if (!pagadoPorId) return toast.error("Indica quién pagó.");
     if (entre.length === 0) return toast.error("Marca entre quiénes se divide.");
+    if (pagadores.length === 0) return toast.error("Marca quién puso el dinero.");
+    const revision = validarPagadores(montoCentavos, resolverPagadores(pagadores, montoCentavos));
+    if (!revision.ok) return toast.error(revision.error);
     if (vistaPrevia && !vistaPrevia.ok) return toast.error(vistaPrevia.error);
 
     setEnviando(true);
@@ -96,7 +106,7 @@ export function NuevoGasto({
         grupoId,
         descripcion: descripcion.trim(),
         montoCentavos,
-        pagadoPorId,
+        pagadores: resolverPagadores(pagadores, montoCentavos),
         tipoReparto,
         categoriaId: categoriaId || null,
         reparto: entradas,
@@ -139,27 +149,15 @@ export function NuevoGasto({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>¿Quién pagó?</Label>
-          <Select
-            value={pagadoPorId}
-            items={etiquetasParticipantes}
-            onValueChange={(v) => setPagadoPorId(v ?? "")}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecciona" />
-            </SelectTrigger>
-            <SelectContent>
-              {participantes.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <SelectorPagadores
+        participantes={participantes}
+        moneda={moneda}
+        totalCentavos={montoCentavos}
+        pagadores={pagadores}
+        onChange={setPagadores}
+      />
 
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Categoría</Label>
           <Select

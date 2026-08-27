@@ -21,10 +21,20 @@ export type LineaReparto = {
   pesoEntrada: number | null;
 };
 
+/** Una línea de "quién puso el dinero". */
+export type LineaPagador = {
+  participanteId: string;
+  montoCentavos: number;
+};
+
 export type GastoCalculo = {
   id: string;
   montoCentavos: number;
-  pagadoPorId: string;
+  /**
+   * Quiénes pusieron el dinero y cuánto cada uno. Es una lista porque un
+   * gasto se puede cubrir entre varios; la suma es igual a `montoCentavos`.
+   */
+  pagadores: LineaPagador[];
   reparto: Array<{ participanteId: string; montoCentavos: number }>;
 };
 

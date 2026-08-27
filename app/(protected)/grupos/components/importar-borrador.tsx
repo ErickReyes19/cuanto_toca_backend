@@ -55,7 +55,7 @@ export function ImportarBorrador() {
           {
             descripcion: gasto.descripcion,
             montoCentavos: gasto.montoCentavos,
-            pagadoPorId: gasto.pagadoPorId,
+            pagadores: gasto.pagadores,
             categoriaSlug: null,
             reparto: resultado.lineas.map((linea) => ({
               participanteId: linea.participanteId,
@@ -68,6 +68,7 @@ export function ImportarBorrador() {
       const { grupoId } = await importarGrupoLocal({
         nombre: borrador.nombre.trim() || "Mi grupo",
         moneda: borrador.moneda,
+        tipo: borrador.tipo ?? "VIAJE_REUNION",
         participantes: borrador.participantes,
         gastos,
       });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Save, Trash2, Users, Wallet } from "lucide-react";
+import { Plane, Plus, Save, ShoppingCart, Trash2, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 import { toast } from "sonner";
@@ -30,6 +30,12 @@ import { calcularSaldos, totalGastado } from "@/lib/split/saldos";
 import { escribirLocal, useAlmacenamientoLocal } from "@/hooks/use-almacenamiento-local";
 import { useMonedaSugerida } from "@/hooks/use-moneda-sugerida";
 import type { GastoCalculo } from "@/lib/split/tipos";
+import {
+  SelectorPagadores,
+  resolverPagadores,
+  type Pagador,
+} from "@/components/grupos/selector-pagadores";
+import { validarPagadores } from "@/lib/split/reparto";
 import { enviarConEnter } from "@/lib/formulario";
 
 export const CLAVE_BORRADOR = "cuanto-toca:grupo-local";
@@ -40,17 +46,38 @@ export type GastoLocal = {
   id: string;
   descripcion: string;
   montoCentavos: number;
-  pagadoPorId: string;
+  /** Quiénes pusieron el dinero y cuánto. Puede ser más de uno. */
+  pagadores: Pagador[];
   /** Entre quiénes se divide (partes iguales) */
   participanteIds: string[];
 };
 
+/** VIAJE_REUNION reparte por gasto; DESPENSA_FAMILIAR piensa en productos. */
+export type TipoGrupoLocal = "VIAJE_REUNION" | "DESPENSA_FAMILIAR";
+
 export type GrupoLocal = {
   nombre: string;
   moneda: string;
+  tipo: TipoGrupoLocal;
   participantes: ParticipanteLocal[];
   gastos: GastoLocal[];
 };
+
+/** Las dos formas de usar la app. Se elige antes de anotar nada. */
+const TIPOS_GRUPO = [
+  {
+    valor: "VIAJE_REUNION" as const,
+    titulo: "Salida o viaje",
+    detalle: "Cada gasto se divide entre quienes participaron.",
+    Icono: Plane,
+  },
+  {
+    valor: "DESPENSA_FAMILIAR" as const,
+    titulo: "Despensa",
+    detalle: "Producto por producto, marcando a quién le toca cada uno.",
+    Icono: ShoppingCart,
+  },
+];
 
 const nuevoId = () =>
   globalThis.crypto?.randomUUID?.() ?? `tmp-${Math.random().toString(36).slice(2)}`;
@@ -61,7 +88,7 @@ const ETIQUETAS_MONEDA = Object.fromEntries(
 );
 
 function grupoVacio(moneda: string): GrupoLocal {
-  return { nombre: "", moneda, participantes: [], gastos: [] };
+  return { nombre: "", moneda, tipo: "VIAJE_REUNION", participantes: [], gastos: [] };
 }
 
 export function Calculadora() {
@@ -98,7 +125,8 @@ export function Calculadora() {
 
     return gastos.flatMap((gasto) => {
       const entre = gasto.participanteIds.filter((id) => idsValidos.has(id));
-      if (!idsValidos.has(gasto.pagadoPorId) || entre.length === 0) return [];
+      const pagadores = (gasto.pagadores ?? []).filter((x) => idsValidos.has(x.participanteId));
+      if (pagadores.length === 0 || entre.length === 0) return [];
 
       const resultado = repartirGasto({
         montoCentavos: gasto.montoCentavos,
@@ -111,7 +139,7 @@ export function Calculadora() {
         {
           id: gasto.id,
           montoCentavos: gasto.montoCentavos,
-          pagadoPorId: gasto.pagadoPorId,
+          pagadores,
           reparto: resultado.lineas,
         },
       ];
@@ -144,9 +172,11 @@ export function Calculadora() {
       participantes: g.participantes.filter((p) => p.id !== id),
       // Se limpian las referencias para que ningún gasto quede huérfano.
       gastos: g.gastos
-        .filter((gasto) => gasto.pagadoPorId !== id)
+        // Si quien sale era el único que había puesto dinero, el gasto se va con él.
+        .filter((gasto) => gasto.pagadores.some((x) => x.participanteId !== id))
         .map((gasto) => ({
           ...gasto,
+          pagadores: gasto.pagadores.filter((x) => x.participanteId !== id),
           participanteIds: gasto.participanteIds.filter((pid) => pid !== id),
         })),
     }));
@@ -173,13 +203,43 @@ export function Calculadora() {
             <Users className="size-5" /> 1. El grupo
           </CardTitle>
           <CardDescription>
-            Ponle nombre, elige la moneda y agrega a quienes salieron.
+            Elige el tipo, ponle nombre y agrega a quienes participaron.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* El tipo cambia cómo se piensa el gasto: por salida o por producto. */}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {TIPOS_GRUPO.map((opcion) => {
+              const activo = grupo.tipo === opcion.valor;
+              return (
+                <button
+                  key={opcion.valor}
+                  type="button"
+                  onClick={() => setGrupo((g) => ({ ...g, tipo: opcion.valor }))}
+                  aria-pressed={activo}
+                  className={`rounded-xl border p-3 text-left transition-colors ${
+                    activo ? "border-primary bg-primary/5" : "hover:bg-muted"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <opcion.Icono className="size-4" />
+                    {opcion.titulo}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {opcion.detalle}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-[1fr_200px]">
             <Input
-              placeholder="Ej. Playa con los muchachos"
+              placeholder={
+                grupo.tipo === "DESPENSA_FAMILIAR"
+                  ? "Ej. Súper de la quincena"
+                  : "Ej. Playa con los muchachos"
+              }
               value={grupo.nombre}
               onChange={(e) => setGrupo((g) => ({ ...g, nombre: e.target.value }))}
               maxLength={120}
@@ -251,13 +311,18 @@ export function Calculadora() {
           {gastos.length > 0 ? (
             <ul className="divide-y rounded-xl border">
               {gastos.map((gasto) => {
-                const quienPago = participantes.find((p) => p.id === gasto.pagadoPorId);
+                const nombresPago = gasto.pagadores
+                  .map((x) => participantes.find((p) => p.id === x.participanteId)?.nombre)
+                  .filter(Boolean);
                 return (
                   <li key={gasto.id} className="flex items-center gap-3 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{gasto.descripcion}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        Pagó {quienPago?.nombre ?? "—"} · entre {gasto.participanteIds.length}{" "}
+                        {nombresPago.length > 1
+                          ? `Pagaron ${nombresPago.join(" y ")}`
+                          : `Pagó ${nombresPago[0] ?? "—"}`}{" "}
+                        · entre {gasto.participanteIds.length}{" "}
                         {gasto.participanteIds.length === 1 ? "persona" : "personas"}
                       </p>
                     </div>
@@ -378,15 +443,17 @@ function FormularioGasto({
 }) {
   const [descripcion, setDescripcion] = React.useState("");
   const [monto, setMonto] = React.useState("");
-  const [pagadoPorId, setPagadoPorId] = React.useState(participantes[0]?.id ?? "");
+  const [pagadores, setPagadores] = React.useState<Pagador[]>(
+    participantes[0] ? [{ participanteId: participantes[0].id, montoCentavos: 0 }] : []
+  );
   const [entre, setEntre] = React.useState<string[]>(() => participantes.map((p) => p.id));
 
   // Las selecciones se depuran durante el render en vez de con un efecto:
   // si alguien sale del grupo, deja de contar sin provocar otro render.
   const ids = participantes.map((p) => p.id);
   const entreValido = entre.filter((id) => ids.includes(id));
-  const pagadoValido = ids.includes(pagadoPorId) ? pagadoPorId : (ids[0] ?? "");
-  const etiquetasParticipantes = Object.fromEntries(participantes.map((p) => [p.id, p.nombre]));
+  const pagadoresValidos = pagadores.filter((x) => ids.includes(x.participanteId));
+  const montoActual = aUnidadMenor(monto, moneda) ?? 0;
 
   function alternar(id: string) {
     setEntre((actual) =>
@@ -406,8 +473,10 @@ function FormularioGasto({
       toast.error("Describe el gasto (ej. 'Comida').");
       return;
     }
-    if (!pagadoValido) {
-      toast.error("Indica quién pagó.");
+    const resueltos = resolverPagadores(pagadoresValidos, montoCentavos);
+    const revision = validarPagadores(montoCentavos, resueltos);
+    if (!revision.ok) {
+      toast.error(revision.error);
       return;
     }
     if (entreValido.length === 0) {
@@ -419,7 +488,7 @@ function FormularioGasto({
       id: nuevoId(),
       descripcion: descripcion.trim(),
       montoCentavos,
-      pagadoPorId: pagadoValido,
+      pagadores: resueltos,
       participanteIds: entreValido,
     });
 
@@ -447,25 +516,13 @@ function FormularioGasto({
         />
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-muted-foreground">¿Quién pagó?</label>
-        <Select
-          value={pagadoValido}
-          items={etiquetasParticipantes}
-          onValueChange={(valor) => setPagadoPorId(valor ?? "")}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Selecciona" />
-          </SelectTrigger>
-          <SelectContent>
-            {participantes.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <SelectorPagadores
+        participantes={participantes}
+        moneda={moneda}
+        totalCentavos={montoActual}
+        pagadores={pagadoresValidos}
+        onChange={setPagadores}
+      />
 
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-muted-foreground">

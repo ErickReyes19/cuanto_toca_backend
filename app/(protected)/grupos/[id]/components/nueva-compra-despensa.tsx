@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { aUnidadMenor, formatearMonto, getMoneda } from "@/lib/split/moneda";
+import {
+  SelectorPagadores,
+  resolverPagadores,
+  type Pagador,
+} from "@/components/grupos/selector-pagadores";
+import { validarPagadores } from "@/lib/split/reparto";
 import { crearCompraDespensa } from "../../actions";
 
 type Participante = { id: string; nombre: string };
@@ -18,7 +24,9 @@ const nuevaLinea = (participanteIds: string[]): Linea => ({ id: crypto.randomUUI
 /** Formulario de ticket: cada producto se asigna a una o varias personas. */
 export function NuevaCompraDespensa({ grupoId, moneda, participantes }: { grupoId: string; moneda: string; participantes: Participante[] }) {
   const [descripcion, setDescripcion] = React.useState("Compra de supermercado");
-  const [pagadoPorId, setPagadoPorId] = React.useState(participantes[0]?.id ?? "");
+  const [pagadores, setPagadores] = React.useState<Pagador[]>(
+    participantes[0] ? [{ participanteId: participantes[0].id, montoCentavos: 0 }] : []
+  );
   const [lineas, setLineas] = React.useState<Linea[]>(() => [nuevaLinea(participantes.map((p) => p.id))]);
   const [enviando, setEnviando] = React.useState(false);
   const etiquetas = Object.fromEntries(participantes.map((p) => [p.id, p.nombre]));
@@ -40,9 +48,17 @@ export function NuevaCompraDespensa({ grupoId, moneda, participantes }: { grupoI
     if (payload.some((l) => !l.descripcion || l.montoCentavos <= 0 || l.participanteIds.length === 0)) {
       return toast.error("Completa cada producto con su monto y a quién corresponde.");
     }
+    if (pagadores.length === 0) return toast.error("Marca quién puso el dinero.");
+    const revision = validarPagadores(total, resolverPagadores(pagadores, total));
+    if (!revision.ok) return toast.error(revision.error);
     setEnviando(true);
     try {
-      await crearCompraDespensa({ grupoId, descripcion: descripcion.trim(), pagadoPorId, lineas: payload });
+      await crearCompraDespensa({
+        grupoId,
+        descripcion: descripcion.trim(),
+        pagadores: resolverPagadores(pagadores, total),
+        lineas: payload,
+      });
       setDescripcion("Compra de supermercado"); setLineas([nuevaLinea(participantes.map((p) => p.id))]);
       toast.success("Ticket guardado y repartido automáticamente.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo guardar el ticket."); }
@@ -52,7 +68,7 @@ export function NuevaCompraDespensa({ grupoId, moneda, participantes }: { grupoI
   return <form onSubmit={enviar} className="space-y-4 rounded-xl border bg-muted/30 p-4">
     <div className="grid gap-3 sm:grid-cols-2">
       <div className="space-y-1.5"><Label htmlFor="compra-descripcion">Compra</Label><Input id="compra-descripcion" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} maxLength={160} /></div>
-      <div className="space-y-1.5"><Label>¿Quién pagó todo el ticket?</Label><Select value={pagadoPorId} items={etiquetas} onValueChange={(v) => setPagadoPorId(v ?? "")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{participantes.map((p) => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}</SelectContent></Select></div>
+      <SelectorPagadores participantes={participantes} moneda={moneda} totalCentavos={total} pagadores={pagadores} onChange={setPagadores} />
     </div>
     <div className="space-y-2"><div className="flex items-center justify-between"><Label>Productos</Label><span className="text-sm font-semibold tabular-nums">Total: {formatearMonto(total, moneda)}</span></div>
       {lineas.map((linea, indice) => <div key={linea.id} className="rounded-lg border bg-background p-3 space-y-2">

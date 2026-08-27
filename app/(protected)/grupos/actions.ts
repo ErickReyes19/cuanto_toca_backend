@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { getSession } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { repartirGasto, repartirIgual } from "@/lib/split/reparto";
+import { repartirGasto, repartirIgual, validarPagadores } from "@/lib/split/reparto";
 import {
   CrearCompraDespensaSchema,
   CrearGastoSchema,
@@ -145,7 +145,7 @@ export async function obtenerGrupo(grupoId: string) {
         include: {
           reparto: true,
           categoria: { select: { slug: true, nombre: true, icono: true } },
-          pagadoPor: { select: { id: true, nombre: true } },
+          pagadores: { include: { participante: { select: { id: true, nombre: true } } } },
         },
         orderBy: [{ fecha: "desc" }, { createAt: "desc" }],
       },
@@ -183,8 +183,11 @@ export async function obtenerGrupo(grupoId: string) {
       montoCentavos: g.montoCentavos,
       fecha: g.fecha,
       tipoReparto: g.tipoReparto,
-      pagadoPorId: g.pagadoPorId,
-      pagadoPorNombre: g.pagadoPor.nombre,
+      pagadores: g.pagadores.map((p) => ({
+        participanteId: p.participanteId,
+        nombre: p.participante.nombre,
+        montoCentavos: p.montoCentavos,
+      })),
       categoria: g.categoria,
       reparto: g.reparto.map((r) => ({
         participanteId: r.participanteId,
@@ -368,10 +371,15 @@ export async function crearGasto(input: CrearGastoInput) {
   });
   const idsValidos = new Set(activos.map((p) => p.id));
 
-  if (!idsValidos.has(datos.pagadoPorId)) throw new Error("Quien pagó no pertenece al grupo.");
+  if (datos.pagadores.some((p) => !idsValidos.has(p.participanteId))) {
+    throw new Error("Quien pagó no pertenece al grupo.");
+  }
   if (datos.reparto.some((r) => !idsValidos.has(r.participanteId))) {
     throw new Error("El reparto incluye a alguien que no está en el grupo.");
   }
+
+  const pagos = validarPagadores(datos.montoCentavos, datos.pagadores);
+  if (!pagos.ok) throw new Error(pagos.error);
 
   const resultado = repartirGasto({
     montoCentavos: datos.montoCentavos,
@@ -386,8 +394,14 @@ export async function crearGasto(input: CrearGastoInput) {
       grupoId: datos.grupoId,
       descripcion: datos.descripcion,
       montoCentavos: datos.montoCentavos,
-      pagadoPorId: datos.pagadoPorId,
       tipoReparto: datos.tipoReparto,
+      pagadores: {
+        create: datos.pagadores.map((p) => ({
+          id: randomUUID(),
+          participanteId: p.participanteId,
+          montoCentavos: p.montoCentavos,
+        })),
+      },
       categoriaId: datos.categoriaId || null,
       fecha: datos.fecha ?? new Date(),
       nota: datos.nota || null,
@@ -429,7 +443,9 @@ export async function crearCompraDespensa(input: CrearCompraDespensaInput) {
     select: { id: true },
   });
   const idsValidos = new Set(participantes.map((p) => p.id));
-  if (!idsValidos.has(datos.pagadoPorId)) throw new Error("Quien pagó no pertenece al grupo.");
+  if (datos.pagadores.some((p) => !idsValidos.has(p.participanteId))) {
+    throw new Error("Quien pagó no pertenece al grupo.");
+  }
   for (const linea of datos.lineas) {
     if (new Set(linea.participanteIds).size !== linea.participanteIds.length) {
       throw new Error("Un producto no puede incluir a la misma persona dos veces.");
@@ -455,7 +471,10 @@ export async function crearCompraDespensa(input: CrearCompraDespensaInput) {
     await tx.gasto.create({
       data: {
         id: gastoId, grupoId: datos.grupoId, descripcion: datos.descripcion,
-        montoCentavos, pagadoPorId: datos.pagadoPorId, tipoReparto: "EXACTO",
+        montoCentavos, tipoReparto: "EXACTO",
+        pagadores: { create: datos.pagadores.map((p) => ({
+          id: randomUUID(), participanteId: p.participanteId, montoCentavos: p.montoCentavos,
+        })) },
         reparto: { create: [...totales].map(([participanteId, monto]) => ({
           id: randomUUID(), participanteId, montoCentavos: monto,
         })) },
@@ -579,6 +598,7 @@ export async function importarGrupoLocal(input: ImportarGrupoInput) {
         id: grupoId,
         nombre: datos.nombre,
         moneda: datos.moneda,
+        tipo: datos.tipo,
         codigoInvitacion,
         propietarioId: session.IdUser,
         participantes: {
@@ -592,8 +612,14 @@ export async function importarGrupoLocal(input: ImportarGrupoInput) {
     });
 
     for (const gasto of datos.gastos) {
-      const pagadoPorId = mapa.get(gasto.pagadoPorId);
-      if (!pagadoPorId) continue;
+      const pagadores = gasto.pagadores
+        .filter((p) => mapa.has(p.participanteId))
+        .map((p) => ({
+          id: randomUUID(),
+          participanteId: mapa.get(p.participanteId)!,
+          montoCentavos: p.montoCentavos,
+        }));
+      if (pagadores.length === 0) continue;
 
       await tx.gasto.create({
         data: {
@@ -601,7 +627,7 @@ export async function importarGrupoLocal(input: ImportarGrupoInput) {
           grupoId,
           descripcion: gasto.descripcion,
           montoCentavos: gasto.montoCentavos,
-          pagadoPorId,
+          pagadores: { create: pagadores },
           // El reparto ya viene resuelto a montos exactos desde el navegador.
           tipoReparto: "EXACTO",
           categoriaId: gasto.categoriaSlug ? porSlug.get(gasto.categoriaSlug) ?? null : null,

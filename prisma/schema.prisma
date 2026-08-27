@@ -178,7 +178,7 @@ model Participante {
 
   grupo                   Grupo                        @relation(fields: [grupoId], references: [id], onDelete: Cascade)
   usuario                 Usuarios?                    @relation("ParticipacionesDelUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
-  gastosPagados           Gasto[]                      @relation("GastoPagadoPor")
+  gastosPagados           GastoPagador[]               @relation("GastoPagadoPor")
   participaciones         GastoParticipacion[]
   participacionesDespensa LineaDespensaParticipacion[]
   pagosEnviados           Pago[]                       @relation("PagoEmisor")
@@ -210,20 +210,19 @@ model Gasto {
   fecha         DateTime    @default(now())
   tipoReparto   TipoReparto @default(IGUAL)
   categoriaId   String?     @db.VarChar(36)
-  /// Participante que puso el dinero
-  pagadoPorId   String      @db.VarChar(36)
   nota          String?     @db.VarChar(500)
   createAt      DateTime    @default(now())
   updateAt      DateTime    @updatedAt
 
   grupo          Grupo                @relation(fields: [grupoId], references: [id], onDelete: Cascade)
   categoria      CategoriaGasto?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  pagadoPor      Participante         @relation("GastoPagadoPor", fields: [pagadoPorId], references: [id], onDelete: Cascade)
+  /// Quién puso el dinero. Es una lista porque en un viaje es normal que un
+  /// gasto lo cubran entre dos o más.
+  pagadores      GastoPagador[]
   reparto        GastoParticipacion[]
   compraDespensa CompraDespensa?
 
   @@index([grupoId], map: "IX_Gasto_grupoId")
-  @@index([pagadoPorId], map: "IX_Gasto_pagadoPorId")
   @@index([categoriaId], map: "IX_Gasto_categoriaId")
   @@index([grupoId, fecha], map: "IX_Gasto_grupo_fecha")
 }
@@ -272,6 +271,21 @@ model LineaDespensaParticipacion {
 
   @@unique([lineaId, participanteId], map: "UQ_LineaDespensa_participante")
   @@index([participanteId], map: "IX_LineaDespensaParticipacion_participanteId")
+}
+
+/// Cuánto puso cada quien de su bolsa en un gasto.
+/// La suma de los pagadores SIEMPRE es igual al monto del gasto.
+model GastoPagador {
+  id             String @id @default(uuid()) @db.VarChar(36)
+  gastoId        String @db.VarChar(36)
+  participanteId String @db.VarChar(36)
+  montoCentavos  Int
+
+  gasto        Gasto        @relation(fields: [gastoId], references: [id], onDelete: Cascade)
+  participante Participante @relation("GastoPagadoPor", fields: [participanteId], references: [id], onDelete: Cascade)
+
+  @@unique([gastoId, participanteId], map: "UQ_Pagador_gasto_participante")
+  @@index([participanteId], map: "IX_GastoPagador_participanteId")
 }
 
 /// Cuánto le corresponde de un gasto a cada participante.

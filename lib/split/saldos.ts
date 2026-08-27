@@ -27,7 +27,10 @@ export function calcularSaldos(
   };
 
   for (const gasto of gastos) {
-    sumar(pagado, gasto.pagadoPorId, gasto.montoCentavos);
+    // Cada quien se acredita solo lo que puso de su bolsa.
+    for (const pagador of gasto.pagadores) {
+      sumar(pagado, pagador.participanteId, pagador.montoCentavos);
+    }
     for (const linea of gasto.reparto) {
       sumar(debido, linea.participanteId, linea.montoCentavos);
     }

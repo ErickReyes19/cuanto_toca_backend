@@ -34,6 +34,41 @@ function repartirPorPesos(montoCentavos: number, pesos: number[]): number[] {
   return asignados;
 }
 
+/**
+ * Valida las líneas de "quién puso el dinero".
+ * La suma tiene que dar exactamente el total del gasto: si no, los saldos
+ * dejarían de cuadrar y la liquidación mentiría.
+ */
+export function validarPagadores(
+  montoCentavos: number,
+  pagadores: Array<{ participanteId: string; montoCentavos: number }>
+): { ok: true } | { ok: false; error: string } {
+  if (pagadores.length === 0) return { ok: false, error: "Indica quién puso el dinero." };
+
+  const ids = new Set(pagadores.map((p) => p.participanteId));
+  if (ids.size !== pagadores.length) {
+    return { ok: false, error: "Hay una persona repetida entre quienes pagaron." };
+  }
+
+  if (pagadores.some((p) => !Number.isInteger(p.montoCentavos) || p.montoCentavos <= 0)) {
+    return { ok: false, error: "Cada quien debe poner un monto mayor a cero." };
+  }
+
+  const suma = pagadores.reduce((total, p) => total + p.montoCentavos, 0);
+  if (suma !== montoCentavos) {
+    const diferencia = montoCentavos - suma;
+    return {
+      ok: false,
+      error:
+        diferencia > 0
+          ? `Falta asignar ${diferencia} de lo que se pagó.`
+          : `Lo aportado se pasa por ${Math.abs(diferencia)} del total.`,
+    };
+  }
+
+  return { ok: true };
+}
+
 /** Divide un monto en n partes iguales, exactas al centavo. */
 export function repartirIgual(montoCentavos: number, n: number): number[] {
   if (n <= 0) return [];

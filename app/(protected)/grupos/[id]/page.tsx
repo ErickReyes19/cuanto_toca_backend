@@ -145,7 +145,7 @@ export default async function GrupoPage({ params }: { params: Promise<{ id: stri
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{gasto.descripcion}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      Pagó {gasto.pagadoPorNombre}
+                      {etiquetaPagadores(gasto.pagadores)}
                       {gasto.categoria ? ` · ${gasto.categoria.nombre}` : ""} ·{" "}
                       {new Date(gasto.fecha).toLocaleDateString("es-419", {
                         day: "2-digit",
@@ -189,4 +189,15 @@ export default async function GrupoPage({ params }: { params: Promise<{ id: stri
       ) : null}
     </div>
   );
+}
+
+/** "Pagó Ana" o "Pagaron Ana y Luis", según cuántos pusieron. */
+function etiquetaPagadores(pagadores: Array<{ nombre: string }>) {
+  const nombres = pagadores.map((p) => p.nombre);
+
+  if (nombres.length === 0) return "Sin pagador";
+  if (nombres.length === 1) return `Pagó ${nombres[0]}`;
+  if (nombres.length === 2) return `Pagaron ${nombres[0]} y ${nombres[1]}`;
+
+  return `Pagaron ${nombres[0]}, ${nombres[1]} y ${nombres.length - 2} más`;
 }

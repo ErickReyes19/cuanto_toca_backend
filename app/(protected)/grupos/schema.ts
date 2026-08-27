@@ -28,11 +28,17 @@ export const LineaRepartoSchema = z.object({
   valor: z.number().int().min(0).optional(),
 });
 
+/** Quién puso el dinero y cuánto. Uno o varios. */
+export const LineaPagadorSchema = z.object({
+  participanteId: z.string().min(1),
+  montoCentavos: z.number().int().positive(),
+});
+
 export const CrearGastoSchema = z.object({
   grupoId: z.string().min(1),
   descripcion: z.string().trim().min(1, "Describe el gasto").max(160),
   montoCentavos: z.number().int().positive("El monto debe ser mayor a cero"),
-  pagadoPorId: z.string().min(1, "Indica quién pagó"),
+  pagadores: z.array(LineaPagadorSchema).min(1, "Indica quién puso el dinero"),
   tipoReparto: z.enum(TIPOS_REPARTO),
   categoriaId: z.string().min(1).nullable().optional(),
   fecha: z.coerce.date().optional(),
@@ -45,7 +51,7 @@ export type CrearGastoInput = z.infer<typeof CrearGastoSchema>;
 export const CrearCompraDespensaSchema = z.object({
   grupoId: z.string().min(1),
   descripcion: z.string().trim().min(1, "Describe la compra").max(160),
-  pagadoPorId: z.string().min(1, "Indica quién pagó"),
+  pagadores: z.array(LineaPagadorSchema).min(1, "Indica quién puso el dinero"),
   lineas: z
     .array(
       z.object({
@@ -72,13 +78,14 @@ export type RegistrarPagoInput = z.infer<typeof RegistrarPagoSchema>;
 export const ImportarGrupoSchema = z.object({
   nombre: z.string().trim().min(1).max(120),
   moneda: z.string().trim().toUpperCase().refine(esMonedaValida),
+  tipo: z.enum(TIPOS_GRUPO).default("VIAJE_REUNION"),
   participantes: z.array(z.object({ id: z.string(), nombre: NombreParticipante })).min(1).max(50),
   gastos: z
     .array(
       z.object({
         descripcion: z.string().trim().min(1).max(160),
         montoCentavos: z.number().int().positive(),
-        pagadoPorId: z.string().min(1),
+        pagadores: z.array(LineaPagadorSchema).min(1),
         categoriaSlug: z.string().optional().nullable(),
         reparto: z.array(z.object({ participanteId: z.string(), montoCentavos: z.number().int().min(0) })).min(1),
       })
