@@ -8,6 +8,7 @@ import { GoogleAd } from "@/components/google-ad";
 import { Button } from "@/components/ui/button";
 import { SITIO } from "@/lib/site";
 import { Calculadora } from "./components/calculadora";
+import { Caracteristica } from "./components/caracteristica";
 import { SiteFooter } from "./components/site-footer";
 import { SiteHeader } from "./components/site-header";
 
@@ -181,24 +182,6 @@ export default async function InicioPage() {
       </main>
 
       <SiteFooter />
-    </div>
-  );
-}
-
-function Caracteristica({
-  Icon,
-  titulo,
-  detalle,
-}: {
-  Icon: typeof Calculator;
-  titulo: string;
-  detalle: string;
-}) {
-  return (
-    <div className="rounded-xl border p-4">
-      <Icon className="mb-2 size-5 text-primary" />
-      <p className="font-medium">{titulo}</p>
-      <p className="text-sm text-muted-foreground">{detalle}</p>
     </div>
   );
 }

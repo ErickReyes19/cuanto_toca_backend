@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { simplificarDeudas } from "@/lib/split/liquidacion";
 import { formatearMonto } from "@/lib/split/moneda";
+import { etiquetaPagadores } from "@/lib/split/etiquetas";
 import { calcularSaldos, totalGastado } from "@/lib/split/saldos";
 import { obtenerCategorias, obtenerGrupo } from "../actions";
 import {
@@ -202,15 +203,4 @@ export default async function GrupoPage({ params }: { params: Promise<{ id: stri
       ) : null}
     </div>
   );
-}
-
-/** "Pagó Ana" o "Pagaron Ana y Luis", según cuántos pusieron. */
-function etiquetaPagadores(pagadores: Array<{ nombre: string }>) {
-  const nombres = pagadores.map((p) => p.nombre);
-
-  if (nombres.length === 0) return "Sin pagador";
-  if (nombres.length === 1) return `Pagó ${nombres[0]}`;
-  if (nombres.length === 2) return `Pagaron ${nombres[0]} y ${nombres[1]}`;
-
-  return `Pagaron ${nombres[0]}, ${nombres[1]} y ${nombres.length - 2} más`;
 }

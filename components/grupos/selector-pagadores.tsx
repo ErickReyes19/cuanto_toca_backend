@@ -1,6 +1,7 @@
 "use client";
 
 import { Users } from "lucide-react";
+import * as React from "react";
 
 import { Input } from "@/components/ui/input";
 import { aUnidadMenor, formatearMonto, getMoneda } from "@/lib/split/moneda";
@@ -33,6 +34,36 @@ export function SelectorPagadores({
   const asignado = pagadores.reduce((suma, p) => suma + p.montoCentavos, 0);
   const diferencia = totalCentavos - asignado;
 
+  /**
+   * El texto tal cual lo escribe la persona.
+   *
+   * No se puede usar el monto formateado como `value` del input: reformatear en
+   * cada tecla hace que el siguiente dígito se pegue a un texto ya formateado
+   * ("2" -> "2.00" -> "2.000") y el parser lo relee como separador de miles.
+   * Tecleando "20" terminabas con 2000.
+   */
+  const [textos, setTextos] = React.useState<Record<string, string>>({});
+
+  /**
+   * Qué se muestra en el campo.
+   *
+   * Se resuelve durante el render, sin efectos: si lo escrito sigue valiendo
+   * el mismo monto, se respeta tal cual (así "12." no se convierte en "12.00"
+   * mientras se teclea); si el monto cambió desde fuera —el botón de repartir,
+   * otro total— se muestra el valor nuevo ya formateado.
+   */
+  function textoDe(pagador: Pagador) {
+    const escrito = textos[pagador.participanteId];
+
+    if (escrito !== undefined && (aUnidadMenor(escrito, moneda) ?? 0) === pagador.montoCentavos) {
+      return escrito;
+    }
+
+    return pagador.montoCentavos
+      ? (pagador.montoCentavos / 10 ** decimales).toFixed(decimales)
+      : "";
+  }
+
   function alternar(id: string) {
     const yaEsta = pagadores.some((p) => p.participanteId === id);
 
@@ -46,7 +77,8 @@ export function SelectorPagadores({
     onChange([...pagadores, { participanteId: id, montoCentavos: 0 }]);
   }
 
-  function actualizarMonto(id: string, crudo: string) {
+  function escribirMonto(id: string, crudo: string) {
+    setTextos((actual) => ({ ...actual, [id]: crudo }));
     onChange(
       pagadores.map((p) =>
         p.participanteId === id ? { ...p, montoCentavos: aUnidadMenor(crudo, moneda) ?? 0 } : p
@@ -61,9 +93,7 @@ export function SelectorPagadores({
     const base = Math.floor(totalCentavos / pagadores.length);
     const sobra = totalCentavos - base * pagadores.length;
 
-    onChange(
-      pagadores.map((p, i) => ({ ...p, montoCentavos: base + (i < sobra ? 1 : 0) }))
-    );
+    onChange(pagadores.map((p, i) => ({ ...p, montoCentavos: base + (i < sobra ? 1 : 0) })));
   }
 
   return (
@@ -108,28 +138,20 @@ export function SelectorPagadores({
             const persona = participantes.find((p) => p.id === pagador.participanteId);
             return (
               <div key={pagador.participanteId} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {persona?.nombre ?? "—"}
-                </span>
+                <span className="min-w-0 flex-1 truncate text-sm">{persona?.nombre ?? "—"}</span>
                 <Input
                   aria-label={`Cuánto puso ${persona?.nombre ?? ""}`}
                   inputMode="decimal"
                   placeholder={decimales ? "0.00" : "0"}
-                  value={
-                    pagador.montoCentavos
-                      ? formatearMontoSinSimbolo(pagador.montoCentavos, decimales)
-                      : ""
-                  }
-                  onChange={(e) => actualizarMonto(pagador.participanteId, e.target.value)}
+                  value={textoDe(pagador)}
+                  onChange={(e) => escribirMonto(pagador.participanteId, e.target.value)}
                   className="w-28 text-right tabular-nums"
                 />
               </div>
             );
           })}
 
-          <p
-            className={`text-xs ${diferencia === 0 ? "text-muted-foreground" : "text-destructive"}`}
-          >
+          <p className={`text-xs ${diferencia === 0 ? "text-muted-foreground" : "text-destructive"}`}>
             {diferencia === 0
               ? `Cuadra con el total: ${formatearMonto(totalCentavos, moneda)}`
               : diferencia > 0
@@ -145,11 +167,6 @@ export function SelectorPagadores({
       )}
     </div>
   );
-}
-
-/** Mantiene los inputs sincronizados cuando el formulario se reinicia. */
-function formatearMontoSinSimbolo(montoCentavos: number, decimales: number): string {
-  return (montoCentavos / 10 ** decimales).toFixed(decimales);
 }
 
 /**

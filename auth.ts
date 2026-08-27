@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
 import { randomUUID } from "node:crypto";
@@ -88,11 +87,10 @@ export const decrypt = async (
       iss: payload.iss as string,
       aud: payload.aud as string,
     };
-  } catch (err: any) {
-    console.error(
-      "JWT error:",
-      err.name === "JWTExpired" ? "Token expirado" : err
-    );
+  } catch (err) {
+    // `jose` marca el token vencido con este `code`; el resto sí interesa verlo.
+    const vencido = err instanceof Error && err.name === "JWTExpired";
+    console.error("JWT error:", vencido ? "Token expirado" : err);
     return null;
   }
 };
