@@ -30,6 +30,7 @@ export const MODULOS: GrupoNav[] = [
     items: [
       { titulo: "Panel", href: "/dashboard", icono: LayoutDashboard, permiso: null },
       { titulo: "Mis grupos", href: "/grupos", icono: Receipt, permiso: null },
+      { titulo: "Amigos", href: "/amigos", icono: Users, permiso: null },
     ],
   },
   {

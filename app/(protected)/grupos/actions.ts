@@ -51,6 +51,52 @@ async function requerirSesion() {
  * Un grupo lo ve su dueño y cualquier participante vinculado a una
  * cuenta real. Devuelve el grupo o lanza error.
  */
+/** Obtiene contactos en ambos sentidos; la tabla guarda la pareja en orden canónico. */
+export async function obtenerAmigos() {
+  const session = await requerirSesion();
+  const amistades = await prisma.amistad.findMany({
+    where: { OR: [{ usuarioId: session.IdUser }, { amigoId: session.IdUser }] },
+    include: {
+      usuario: { select: { id: true, nombre: true, usuario: true, fotoUrl: true } },
+      amigo: { select: { id: true, nombre: true, usuario: true, fotoUrl: true } },
+    },
+    orderBy: { createAt: "desc" },
+  });
+
+  return amistades.map((amistad) => {
+    const contacto = amistad.usuarioId === session.IdUser ? amistad.amigo : amistad.usuario;
+    return {
+      id: contacto.id,
+      nombre: contacto.nombre?.trim() || contacto.usuario,
+      fotoUrl: contacto.fotoUrl,
+    };
+  });
+}
+
+/** Registra la relación una sola vez entre el usuario y las cuentas del grupo. */
+async function registrarAmistadesDelGrupo(grupoId: string, usuarioId: string) {
+  const grupo = await prisma.grupo.findUnique({
+    where: { id: grupoId },
+    select: {
+      propietarioId: true,
+      participantes: { where: { usuarioId: { not: null } }, select: { usuarioId: true } },
+    },
+  });
+  if (!grupo) return;
+
+  const contactos = new Set<string>([
+    grupo.propietarioId,
+    ...grupo.participantes.flatMap((participante) => participante.usuarioId ? [participante.usuarioId] : []),
+  ]);
+  contactos.delete(usuarioId);
+
+  const relaciones = [...contactos].map((contactoId) => {
+    const [usuarioIdOrdenado, amigoIdOrdenado] = [usuarioId, contactoId].sort();
+    return { id: randomUUID(), usuarioId: usuarioIdOrdenado, amigoId: amigoIdOrdenado };
+  });
+  if (relaciones.length > 0) await prisma.amistad.createMany({ data: relaciones, skipDuplicates: true });
+}
+
 async function requerirAcceso(grupoId: string) {
   const session = await requerirSesion();
 
@@ -76,27 +122,26 @@ export async function crearGrupo(input: CrearGrupoInput) {
   const session = await requerirSesion();
   const datos = CrearGrupoSchema.parse(input);
 
+  const amigoIds = [...new Set(datos.amigoIds)].filter((id) => id !== session.IdUser);
+  const amistades = amigoIds.length === 0 ? [] : await prisma.amistad.findMany({
+    where: { OR: [{ usuarioId: session.IdUser, amigoId: { in: amigoIds } }, { amigoId: session.IdUser, usuarioId: { in: amigoIds } }] },
+    include: { usuario: { select: { id: true, nombre: true, usuario: true } }, amigo: { select: { id: true, nombre: true, usuario: true } } },
+  });
+  const amigos = amistades.map((amistad) => amistad.usuarioId === session.IdUser ? amistad.amigo : amistad.usuario);
+  if (amigos.length !== amigoIds.length) throw new Error("Solo puedes agregar contactos de tu lista de amigos.");
+
   const grupo = await prisma.grupo.create({
     data: {
-      id: randomUUID(),
-      nombre: datos.nombre,
-      descripcion: datos.descripcion || null,
-      moneda: datos.moneda,
-      tipo: datos.tipo,
-      codigoInvitacion: await codigoUnico(),
-      propietarioId: session.IdUser,
-      participantes: {
-        create: datos.participantes.map((nombre, indice) => ({
-          id: randomUUID(),
-          nombre,
-          // El primero de la lista es quien crea el grupo.
-          usuarioId: indice === 0 ? session.IdUser : null,
-        })),
-      },
-    },
-    select: { id: true },
+      id: randomUUID(), nombre: datos.nombre, descripcion: datos.descripcion || null,
+      moneda: datos.moneda, tipo: datos.tipo, codigoInvitacion: await codigoUnico(), propietarioId: session.IdUser,
+      participantes: { create: [
+        ...datos.participantes.map((nombre, indice) => ({ id: randomUUID(), nombre, usuarioId: indice === 0 ? session.IdUser : null })),
+        ...amigos.map((amigo) => ({ id: randomUUID(), nombre: amigo.nombre?.trim() || amigo.usuario, usuarioId: amigo.id })),
+      ] },
+    }, select: { id: true },
   });
 
+  await registrarAmistadesDelGrupo(grupo.id, session.IdUser);
   revalidatePath("/grupos");
   return grupo;
 }
@@ -321,6 +366,7 @@ export async function unirseAGrupo(codigo: string, participanteId?: string) {
       where: { id: destino.id },
       data: { usuarioId: session.IdUser },
     });
+    await registrarAmistadesDelGrupo(grupo.id, session.IdUser);
     revalidatePath(`/grupos/${grupo.id}`);
     return { grupoId: grupo.id, participanteId: destino.id };
   }
@@ -335,6 +381,7 @@ export async function unirseAGrupo(codigo: string, participanteId?: string) {
     select: { id: true },
   });
 
+  await registrarAmistadesDelGrupo(grupo.id, session.IdUser);
   revalidatePath(`/grupos/${grupo.id}`);
   return { grupoId: grupo.id, participanteId: nuevo.id };
 }

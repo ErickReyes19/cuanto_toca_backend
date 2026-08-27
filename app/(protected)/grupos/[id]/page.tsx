@@ -24,6 +24,7 @@ import {
 } from "./components/acciones-grupo";
 import { NuevoGasto } from "./components/nuevo-gasto";
 import { NuevaCompraDespensa } from "./components/nueva-compra-despensa";
+import { BotonCompartirResumen } from "./components/boton-compartir-resumen";
 
 export default async function GrupoPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -67,7 +68,19 @@ export default async function GrupoPage({ params }: { params: Promise<{ id: stri
 
       <Card>
         <CardHeader>
-          <CardTitle>Cuánto le toca a cada quien</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>Cuánto le toca a cada quien</CardTitle>
+            <BotonCompartirResumen
+              nombreGrupo={grupo.nombre}
+              moneda={grupo.moneda}
+              total={formatearMonto(total, grupo.moneda)}
+              transferencias={transferencias.map((transferencia) => ({
+                deNombre: grupo.participantes.find((p) => p.id === transferencia.deParticipanteId)?.nombre ?? "Integrante",
+                aNombre: grupo.participantes.find((p) => p.id === transferencia.aParticipanteId)?.nombre ?? "Integrante",
+                monto: formatearMonto(transferencia.montoCentavos, grupo.moneda),
+              }))}
+            />
+          </div>
           <CardDescription>
             {transferencias.length === 0
               ? "El grupo está cuadrado."

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // Sin `output`: el cliente va a node_modules/.prisma/client. Next lo trata
   // como paquete externo y no lo bundlea, así que Prisma resuelve bien la ruta
   // de su motor en runtime. Con un output propio, el bundle le rompe __dirname
@@ -71,8 +71,26 @@ model Usuarios {
   codigosAcceso       CodigoAcceso[]
   gruposPropios       Grupo[]              @relation("GruposDelUsuario")
   participaciones     Participante[]       @relation("ParticipacionesDelUsuario")
+  amistadesCreadas    Amistad[]            @relation("AmistadUsuario")
+  amistadesRecibidas  Amistad[]            @relation("AmistadAmigo")
 
   @@index([rol_id], map: "IX_Usuarios_rol_id")
+}
+
+/// Relación bidireccional de contactos creada automáticamente cuando dos
+/// cuentas coinciden en un grupo. Los ids se guardan ordenados para que una
+/// amistad exista una sola vez, sin importar quién invitó a quién.
+model Amistad {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  usuarioId String   @db.VarChar(36)
+  amigoId   String   @db.VarChar(36)
+  createAt  DateTime @default(now())
+
+  usuario Usuarios @relation("AmistadUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  amigo   Usuarios @relation("AmistadAmigo", fields: [amigoId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, amigoId], map: "UQ_Amistad_usuario_amigo")
+  @@index([amigoId], map: "IX_Amistad_amigoId")
 }
 
 /// Registro a medias: la cuenta NO existe hasta que se verifica el correo.
