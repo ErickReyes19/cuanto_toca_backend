@@ -17,6 +17,26 @@ const GOOGLE_FRAMES = "https://accounts.google.com";
 const GOOGLE_CONEXIONES = "https://accounts.google.com https://www.googleapis.com";
 const GOOGLE_IMAGENES = "https://lh3.googleusercontent.com https://*.googleusercontent.com";
 
+/**
+ * Google AdSense. Ojo: 'strict-dynamic' solo cubre SCRIPTS, así que los
+ * iframes, las imágenes y las llamadas de los anuncios sí necesitan que sus
+ * dominios estén listados aquí explícitamente.
+ */
+const ADS_SCRIPTS =
+  "https://pagead2.googlesyndication.com https://partner.googleadservices.com " +
+  "https://tpc.googlesyndication.com https://adservice.google.com";
+const ADS_FRAMES =
+  "https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://www.google.com " +
+  "https://*.adtrafficquality.google";
+const ADS_IMAGENES =
+  "https://*.g.doubleclick.net https://*.googlesyndication.com https://www.google.com " +
+  "https://pagead2.googlesyndication.com https://*.adtrafficquality.google";
+// adtrafficquality es la deteccion de trafico invalido de Google. Si se
+// bloquea, AdSense lo cuenta en contra de la cuenta.
+const ADS_CONEXIONES =
+  "https://pagead2.googlesyndication.com https://*.g.doubleclick.net https://csi.gstatic.com " +
+  "https://*.adtrafficquality.google";
+
 function construirCsp(nonce: string) {
   // En desarrollo React usa `eval` para reconstruir los stacks del servidor y
   // Turbopack habla por WebSocket; en producción nada de eso hace falta.
@@ -28,15 +48,15 @@ function construirCsp(nonce: string) {
     // 'strict-dynamic' hace que los navegadores modernos ignoren la lista de
     // dominios y confíen solo en lo que cargue un script con nonce. Los
     // dominios quedan como respaldo para navegadores que solo soportan CSP2.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${GOOGLE_SCRIPTS} https: 'unsafe-inline'${scriptDev}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${GOOGLE_SCRIPTS} ${ADS_SCRIPTS} https: 'unsafe-inline'${scriptDev}`,
     // Base UI y shadcn escriben estilos en el atributo `style` (ancho del
     // sidebar, posición de los popovers). Un nonce no cubre atributos inline,
     // así que aquí 'unsafe-inline' es obligatorio para que la UI no se rompa.
     `style-src 'self' 'unsafe-inline' ${GOOGLE_FRAMES}`,
-    `img-src 'self' data: blob: ${GOOGLE_IMAGENES}`,
+    `img-src 'self' data: blob: ${GOOGLE_IMAGENES} ${ADS_IMAGENES}`,
     `font-src 'self' data:`,
-    `connect-src 'self' ${GOOGLE_CONEXIONES}${conexionDev}`,
-    `frame-src 'self' ${GOOGLE_FRAMES}`,
+    `connect-src 'self' ${GOOGLE_CONEXIONES} ${ADS_CONEXIONES}${conexionDev}`,
+    `frame-src 'self' ${GOOGLE_FRAMES} ${ADS_FRAMES}`,
     `worker-src 'self' blob:`,
     `manifest-src 'self'`,
     `object-src 'none'`,

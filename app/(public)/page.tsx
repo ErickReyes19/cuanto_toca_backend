@@ -4,7 +4,9 @@ import { headers } from "next/headers";
 import Link from "next/link";
 
 import { getSession } from "@/auth";
-import { GoogleAd } from "@/components/google-ad";
+import { Anuncio } from "@/components/anuncios/anuncio";
+import { ScriptAdsense } from "@/components/anuncios/script-adsense";
+import { SLOTS } from "@/lib/adsense";
 import { Button } from "@/components/ui/button";
 import { SITIO } from "@/lib/site";
 import { Calculadora } from "./components/calculadora";
@@ -104,6 +106,8 @@ export default async function InicioPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(datosEstructurados) }}
       />
 
+      <ScriptAdsense />
+
       <SiteHeader autenticado={Boolean(session?.IdUser)} />
 
       <main className="flex-1">
@@ -137,7 +141,7 @@ export default async function InicioPage() {
             <Calculadora />
           </section>
 
-          <GoogleAd slot={process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT_LANDING} className="mt-10 min-h-0" />
+          <Anuncio slot={SLOTS.landing} className="mt-10" />
 
           <section id="caracteristicas" className="mt-10 grid scroll-mt-20 gap-4 sm:grid-cols-3">
             <Caracteristica
@@ -178,6 +182,8 @@ export default async function InicioPage() {
               ))}
             </div>
           </section>
+
+          <Anuncio slot={SLOTS.banner} formato="horizontal" className="mt-12" />
         </div>
       </main>
 
