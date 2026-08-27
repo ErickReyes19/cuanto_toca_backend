@@ -39,19 +39,38 @@ function repartirPorPesos(montoCentavos: number, pesos: number[]): number[] {
  * La suma tiene que dar exactamente el total del gasto: si no, los saldos
  * dejarían de cuadrar y la liquidación mentiría.
  */
+/**
+ * Por qué falló la validación de pagadores.
+ *
+ * Va junto al `error` en español para que quien muestre el mensaje pueda
+ * traducirlo sin tener que comparar cadenas. El panel sigue usando `error`
+ * tal cual; las pantallas públicas, que son bilingües, usan el código.
+ */
+export type MotivoPagadores = "SIN_PAGADORES" | "REPETIDO" | "MONTO_CERO" | "NO_CUADRA";
+
 export function validarPagadores(
   montoCentavos: number,
   pagadores: Array<{ participanteId: string; montoCentavos: number }>
-): { ok: true } | { ok: false; error: string } {
-  if (pagadores.length === 0) return { ok: false, error: "Indica quién puso el dinero." };
+): { ok: true } | { ok: false; error: string; motivo: MotivoPagadores } {
+  if (pagadores.length === 0) {
+    return { ok: false, motivo: "SIN_PAGADORES", error: "Indica quién puso el dinero." };
+  }
 
   const ids = new Set(pagadores.map((p) => p.participanteId));
   if (ids.size !== pagadores.length) {
-    return { ok: false, error: "Hay una persona repetida entre quienes pagaron." };
+    return {
+      ok: false,
+      motivo: "REPETIDO",
+      error: "Hay una persona repetida entre quienes pagaron.",
+    };
   }
 
   if (pagadores.some((p) => !Number.isInteger(p.montoCentavos) || p.montoCentavos <= 0)) {
-    return { ok: false, error: "Cada quien debe poner un monto mayor a cero." };
+    return {
+      ok: false,
+      motivo: "MONTO_CERO",
+      error: "Cada quien debe poner un monto mayor a cero.",
+    };
   }
 
   const suma = pagadores.reduce((total, p) => total + p.montoCentavos, 0);
@@ -59,6 +78,7 @@ export function validarPagadores(
     const diferencia = montoCentavos - suma;
     return {
       ok: false,
+      motivo: "NO_CUADRA",
       error:
         diferencia > 0
           ? `Falta asignar ${diferencia} de lo que se pagó.`

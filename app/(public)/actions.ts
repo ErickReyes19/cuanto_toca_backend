@@ -18,6 +18,7 @@ import { generateUserCreatedEmailHtml } from "@/lib/templates/createUserEmail";
 import { randomBytes, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { requestPasswordReset } from "./forgot-password/actions";
+import { getDiccionario } from "@/lib/i18n/servidor";
 import { LoginActionState } from "./state";
 
 export async function forgotPasswordAction(formData: FormData) {
@@ -114,13 +115,15 @@ export async function loginWithCredentialsAction(
   const identifier = formData.get("identifier");
   const contrasena = formData.get("contrasena");
 
+  const t = await getDiccionario();
+
   if (typeof identifier !== "string" || typeof contrasena !== "string") {
-    return { ok: false, message: "Debes ingresar usuario/correo y contraseña." };
+    return { ok: false, message: t.acciones.faltanCredenciales };
   }
 
   const normalizedIdentifier = identifier.trim().toLowerCase();
   if (!normalizedIdentifier || !contrasena.trim()) {
-    return { ok: false, message: "Debes ingresar usuario/correo y contraseña." };
+    return { ok: false, message: t.acciones.faltanCredenciales };
   }
 
   let usuario = normalizedIdentifier;
@@ -132,7 +135,7 @@ export async function loginWithCredentialsAction(
     });
 
     if (!userByEmail) {
-      return { ok: false, message: "Usuario/correo o contraseña inválidos." };
+      return { ok: false, message: t.acciones.credencialesInvalidas };
     }
 
     usuario = userByEmail.usuario;
@@ -143,10 +146,12 @@ export async function loginWithCredentialsAction(
   if ("error" in result && result.error) {
     // El mensaje del segundo paso (correo no enviado, etc.) sí se muestra tal
     // cual; el de credenciales se generaliza para no delatar qué usuario existe.
-    const esCredencial = result.error.toLowerCase().includes("contraseña inválid");
+    // Se compara contra el diccionario y no contra un trozo de texto, para que
+    // la comparación siga valiendo en inglés.
+    const esCredencial = result.error === t.errores.credenciales;
     return {
       ok: false,
-      message: esCredencial ? "Usuario/correo o contraseña inválidos." : result.error,
+      message: esCredencial ? t.acciones.credencialesInvalidas : result.error,
     };
   }
 
@@ -155,13 +160,13 @@ export async function loginWithCredentialsAction(
       ok: false,
       requiereCodigo: true,
       correoEnmascarado: result.enmascarado,
-      message: `Te mandamos un código de 6 dígitos a ${result.enmascarado}.`,
+      message: t.login.codigoEnviado(result.enmascarado),
     };
   }
 
   return {
     ok: true,
-    message: "Inicio de sesión exitoso.",
+    message: t.acciones.sesionIniciada,
     redirect: ("redirect" in result && result.redirect) || "/grupos",
     // `tareasHoy` queda pendiente: aun no existe un modelo de tareas en Prisma.
   };
@@ -173,9 +178,10 @@ export async function verificarCodigoAction(
   formData: FormData,
 ): Promise<LoginActionState> {
   const codigo = formData.get("codigo");
+  const t = await getDiccionario();
 
   if (typeof codigo !== "string" || !codigo.trim()) {
-    return { ok: false, requiereCodigo: true, message: "Escribe el código que te llegó." };
+    return { ok: false, requiereCodigo: true, message: t.acciones.escribeCodigo };
   }
 
   const result = await confirmarCodigoDeAcceso(codigo, "/grupos");
@@ -186,7 +192,7 @@ export async function verificarCodigoAction(
 
   return {
     ok: true,
-    message: "Inicio de sesión exitoso.",
+    message: t.acciones.sesionIniciada,
     redirect: ("redirect" in result && result.redirect) || "/grupos",
   };
 }
@@ -197,6 +203,7 @@ export async function reenviarCodigoAction(
   _formData: FormData,
 ): Promise<LoginActionState> {
   const result = await reenviarCodigoDeAcceso();
+  const t = await getDiccionario();
 
   if ("error" in result && result.error) {
     return { ok: false, requiereCodigo: true, message: result.error };
@@ -206,7 +213,7 @@ export async function reenviarCodigoAction(
     ok: false,
     requiereCodigo: true,
     correoEnmascarado: "enmascarado" in result ? result.enmascarado : undefined,
-    message: "Te mandamos un código nuevo.",
+    message: t.acciones.codigoNuevo,
   };
 }
 
@@ -228,16 +235,18 @@ export async function registrarUsuario(
     const email = formData.get("email");
     const contrasena = formData.get("contrasena");
 
+    const t = await getDiccionario();
+
     if (typeof nombre !== "string" || typeof email !== "string" || typeof contrasena !== "string") {
-        return { ok: false, message: "Completa todos los campos." };
+        return { ok: false, message: t.acciones.completaCampos };
     }
 
     const nombreLimpio = nombre.trim();
     const correo = email.trim().toLowerCase();
 
-    if (nombreLimpio.length < 2) return { ok: false, message: "Escribe tu nombre." };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return { ok: false, message: "El correo no es válido." };
-    if (contrasena.length < 8) return { ok: false, message: "La contraseña debe tener al menos 8 caracteres." };
+    if (nombreLimpio.length < 2) return { ok: false, message: t.acciones.escribeNombre };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) return { ok: false, message: t.acciones.correoInvalido };
+    if (contrasena.length < 8) return { ok: false, message: t.acciones.contrasenaCorta };
 
     const resultado = await iniciarRegistroConCodigo(
         { nombre: nombreLimpio, email: correo, contrasena },
@@ -253,13 +262,13 @@ export async function registrarUsuario(
             ok: false,
             requiereCodigo: true,
             correoEnmascarado: resultado.enmascarado,
-            message: `Te mandamos un código de 6 dígitos a ${resultado.enmascarado}.`,
+            message: t.registro.codigoEnviado(resultado.enmascarado),
         };
     }
 
     return {
         ok: true,
-        message: "¡Listo!",
+        message: t.acciones.listo,
         redirect: ("redirect" in resultado && resultado.redirect) || "/grupos",
     };
 }
@@ -270,9 +279,10 @@ export async function verificarCodigoRegistroAction(
     formData: FormData,
 ): Promise<LoginActionState> {
     const codigo = formData.get("codigo");
+    const t = await getDiccionario();
 
     if (typeof codigo !== "string" || !codigo.trim()) {
-        return { ok: false, requiereCodigo: true, message: "Escribe el código que te llegó." };
+        return { ok: false, requiereCodigo: true, message: t.acciones.escribeCodigo };
     }
 
     const resultado = await confirmarRegistroConCodigo(codigo, "/grupos");
@@ -283,7 +293,7 @@ export async function verificarCodigoRegistroAction(
 
     return {
         ok: true,
-        message: "¡Listo!",
+        message: t.acciones.listo,
         redirect: ("redirect" in resultado && resultado.redirect) || "/grupos",
     };
 }
@@ -294,6 +304,7 @@ export async function reenviarCodigoRegistroAction(
     _formData: FormData,
 ): Promise<LoginActionState> {
     const resultado = await reenviarCodigoRegistro();
+    const t = await getDiccionario();
 
     if ("error" in resultado && resultado.error) {
         return { ok: false, requiereCodigo: true, message: resultado.error };
@@ -303,7 +314,7 @@ export async function reenviarCodigoRegistroAction(
         ok: false,
         requiereCodigo: true,
         correoEnmascarado: "enmascarado" in resultado ? resultado.enmascarado : undefined,
-        message: "Te mandamos un código nuevo.",
+        message: t.acciones.codigoNuevo,
     };
 }
 

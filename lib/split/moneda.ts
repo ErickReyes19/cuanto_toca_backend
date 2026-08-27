@@ -104,12 +104,23 @@ export function aUnidadMayor(montoMenor: number, codigo: string): number {
   return montoMenor / factor(codigo);
 }
 
-/** 125050 -> "L 1,250.50" */
-export function formatearMonto(montoMenor: number, codigo: string): string {
+/**
+ * 125050 -> "L 1,250.50"
+ *
+ * @param localeUi Locale con el que formatear, cuando la interfaz no está en
+ * el idioma del catálogo. Sin él, USD sale como "USD 1,250.50" (es-419);
+ * con "en-US" sale como "$1,250.50", que es lo que espera quien lee la
+ * versión en inglés. Las monedas locales se ven igual con ambos.
+ */
+export function formatearMonto(
+  montoMenor: number,
+  codigo: string,
+  localeUi?: string
+): string {
   const moneda = getMoneda(codigo);
 
   try {
-    return new Intl.NumberFormat(moneda.locale, {
+    return new Intl.NumberFormat(localeUi ?? moneda.locale, {
       style: "currency",
       currency: moneda.codigo,
       minimumFractionDigits: moneda.decimales,

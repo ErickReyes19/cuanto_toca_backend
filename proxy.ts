@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { LANG_HTML, idiomaDeRuta } from "@/lib/i18n/idiomas";
+
 /**
  * Capa de seguridad HTTP. En Next 16 el archivo `middleware` quedó deprecado y
  * se renombró a `proxy`; corre antes de renderizar cualquier ruta.
  *
- * Aquí solo van cabeceras: la autorización de cada pantalla sigue viviendo en
- * los layouts y server actions, que son los únicos que pueden consultar la
- * base y el rol de la sesión.
+ * Aquí van cabeceras: la autorización de cada pantalla sigue viviendo en los
+ * layouts y server actions, que son los únicos que pueden consultar la base y
+ * el rol de la sesión. Lo único que se agrega es el idioma de la URL, para que
+ * páginas y server actions lo lean sin pasárselo por props.
  */
 
 const ES_PRODUCCION = process.env.NODE_ENV === "production";
@@ -67,19 +70,59 @@ function construirCsp(nonce: string) {
   ].join("; ");
 }
 
+/**
+ * Petición especulativa: el navegador va adelantando una ruta, no estrenando
+ * documento.
+ *
+ * Solo se miran cabeceras estándar del navegador. Las suyas propias
+ * (`RSC`, `Next-Router-Prefetch`) Next las consume antes de llegar al proxy,
+ * así que aquí no existen: se ven únicamente `purpose` y `sec-purpose`.
+ */
+function esPrefetch(request: NextRequest) {
+  return (
+    request.headers.get("purpose") === "prefetch" ||
+    request.headers.get("sec-purpose")?.includes("prefetch") === true
+  );
+}
+
 export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const idioma = idiomaDeRuta(pathname);
+
+  const requestHeaders = new Headers(request.headers);
+
+  // El idioma sale del primer segmento de la ruta: `/en/...` es inglés y todo
+  // lo demás español. No se redirige por `Accept-Language`: Googlebot rastrea
+  // desde Estados Unidos y un redirect automático terminaría sacando la
+  // portada en español del índice.
+  //
+  // Esto tiene que pasar también en los prefetch. Un prefetch de `/en/login`
+  // renderiza la página igual, solo que en formato RSC: si se quedara sin
+  // cabecera, la pantalla llegaría precargada en español y el usuario vería
+  // el idioma equivocado al hacer clic.
+  requestHeaders.set("x-idioma", idioma);
+  // La ruta, para que el selector de idioma sepa a qué traducción apuntar.
+  requestHeaders.set("x-ruta", pathname);
+
+  // Los prefetch no estrenan documento, así que se ahorran nonce y CSP. Antes
+  // esto lo hacía el `missing` del matcher, pero ahí también se saltaba el
+  // idioma; ahora entran, recogen la cabecera y salen por aquí.
+  if (esPrefetch(request)) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   const nonce = crypto.randomUUID().replaceAll("-", "");
   const csp = construirCsp(nonce);
 
   // Next lee el CSP del *request* para inyectar el nonce en sus propios
   // scripts durante el render.
-  const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("content-security-policy", csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   response.headers.set("content-security-policy", csp);
+  response.headers.set("content-language", LANG_HTML[idioma]);
 
   // Nada de sniffing de MIME types.
   response.headers.set("x-content-type-options", "nosniff");
@@ -111,19 +154,13 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    {
-      /*
-       * Todo menos los estáticos y los archivos de SEO, que no son HTML y
-       * conviene que Cloudflare pueda cachear sin variaciones por nonce.
-       */
-      source:
-        "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|robots.txt|sitemap.xml|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest)$).*)",
-      // Los prefetch de <Link> no renderizan HTML nuevo: se saltan el CSP para
-      // no invalidar el nonce de la página ya servida.
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
-    },
+    /*
+     * Todo menos los estáticos y los archivos de SEO, que no son HTML y
+     * conviene que Cloudflare pueda cachear sin variaciones por nonce.
+     *
+     * Los prefetch ya no se excluyen aquí: entran al proxy para recoger el
+     * idioma y salen antes de tocar el CSP (ver `esPrefetch`).
+     */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|robots.txt|sitemap.xml|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|webmanifest)$).*)",
   ],
 };

@@ -9,6 +9,7 @@ import {
   generarCodigo,
 } from "@/lib/codigo-acceso";
 import { prisma } from "@/lib/prisma";
+import { getDiccionario } from "@/lib/i18n/servidor";
 
 /**
  * Registro en dos pasos.
@@ -44,7 +45,7 @@ export async function emitirRegistroPendiente(datos: {
       console.warn(
         `[registro] no se envió código: ya se mandó uno hace ${Math.round(transcurridos)}s.`
       );
-      return { ok: false, error: "Ya te mandamos un código hace un momento. Revisa tu correo." };
+      return { ok: false, error: (await getDiccionario()).errores.codigoReciente };
     }
   }
 
@@ -55,7 +56,7 @@ export async function emitirRegistroPendiente(datos: {
     await enviarCodigoPorCorreo(datos.email, datos.nombre, codigo);
   } catch (error) {
     console.error("[registro] no se pudo enviar el código:", error);
-    return { ok: false, error: "No pudimos enviarte el código. Intenta de nuevo en un momento." };
+    return { ok: false, error: (await getDiccionario()).errores.codigoNoEnviado };
   }
 
   const valores = {
@@ -89,21 +90,21 @@ export async function confirmarRegistroPendiente(
   codigo: string
 ): Promise<ResultadoConfirmacion> {
   const limpio = codigo.replace(/\D/g, "");
-  if (limpio.length !== 6) return { ok: false, error: "El código son 6 dígitos." };
+  if (limpio.length !== 6) return { ok: false, error: (await getDiccionario()).errores.codigoSeisDigitos };
 
   const registro = await prisma.registroPendiente.findUnique({ where: { email } });
   if (!registro) {
-    return { ok: false, error: "No hay ningún registro pendiente. Empieza de nuevo." };
+    return { ok: false, error: (await getDiccionario()).errores.registroSinPendiente };
   }
 
   if (registro.expiraEn.getTime() < Date.now()) {
     await prisma.registroPendiente.delete({ where: { id: registro.id } });
-    return { ok: false, error: "El código caducó. Vuelve a registrarte." };
+    return { ok: false, error: (await getDiccionario()).errores.registroCodigoCaducado };
   }
 
   if (registro.intentos >= MAX_INTENTOS) {
     await prisma.registroPendiente.delete({ where: { id: registro.id } });
-    return { ok: false, error: "Demasiados intentos. Vuelve a registrarte." };
+    return { ok: false, error: (await getDiccionario()).errores.registroDemasiadosIntentos };
   }
 
   if (!(await bcrypt.compare(limpio, registro.codigoHash))) {
@@ -114,12 +115,13 @@ export async function confirmarRegistroPendiente(
     });
 
     const restantes = MAX_INTENTOS - actualizado.intentos;
+    const t = await getDiccionario();
     return {
       ok: false,
       error:
         restantes > 0
-          ? `Código incorrecto. Te ${restantes === 1 ? "queda 1 intento" : `quedan ${restantes} intentos`}.`
-          : "Demasiados intentos. Vuelve a registrarte.",
+          ? t.errores.codigoIncorrecto(restantes)
+          : t.errores.registroDemasiadosIntentos,
     };
   }
 

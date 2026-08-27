@@ -41,7 +41,8 @@ export const VERIFICACIONES: Metadata["verification"] = {
  * Se vuelcan tal cual como <meta name="clave" content="valor" />.
  */
 export const METADATOS_EXTRA: Record<string, string> = {
-  // Evita que el navegador ofrezca traducir una app que ya está en español.
+  // El sitio ya trae su propia traducción al inglés en /en, así que no
+  // queremos que Chrome ofrezca encima una traducción automática peor.
   google: "notranslate",
 
   // Ejemplos de lo que podrías agregar:

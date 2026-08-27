@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
 
-import { casosRelacionados } from "@/lib/contenido";
 import { Calculadora } from "../components/calculadora";
-import { PaginaContenido, type Pregunta } from "../components/pagina-contenido";
+import {
+  PaginaContenido,
+  metadatosDeContenido,
+  type Pregunta,
+} from "../components/pagina-contenido";
 
-const RUTA = "/dividir-la-despensa";
-const TITULO = "Cómo dividir la despensa entre varias personas";
-const ENTRADILLA =
-  "Una sola tarjeta paga todo el súper, pero el shampoo es de uno, las cervezas de dos y el arroz de todos. Así se reparte producto por producto sin discutir.";
-
-export const metadata: Metadata = {
-  title: "Dividir la despensa entre varias personas",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
+export const metadata: Metadata = metadatosDeContenido("despensa", "es");
 
 const PREGUNTAS: Pregunta[] = [
   {
@@ -40,13 +34,7 @@ const PREGUNTAS: Pregunta[] = [
 
 export default function DividirLaDespensa() {
   return (
-    <PaginaContenido
-      ruta={RUTA}
-      titulo={TITULO}
-      entradilla={ENTRADILLA}
-      preguntas={PREGUNTAS}
-      relacionadas={casosRelacionados(RUTA)}
-    >
+    <PaginaContenido clave="despensa" preguntas={PREGUNTAS} conRelacionadas>
       <p>
         El súper compartido tiene una particularidad que lo distingue de casi cualquier otro gasto:
         el pago es uno solo, pero el contenido del carrito pertenece a personas distintas. Sale un

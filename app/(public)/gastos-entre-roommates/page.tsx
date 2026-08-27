@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
 
-import { casosRelacionados } from "@/lib/contenido";
 import { Calculadora } from "../components/calculadora";
-import { PaginaContenido, type Pregunta } from "../components/pagina-contenido";
+import {
+  PaginaContenido,
+  metadatosDeContenido,
+  type Pregunta,
+} from "../components/pagina-contenido";
 
-const RUTA = "/gastos-entre-roommates";
-const TITULO = "Cómo llevar los gastos entre roommates";
-const ENTRADILLA =
-  "Renta, luz, agua, internet y súper, cada mes y pagados por personas distintas. Así se lleva la cuenta sin que nadie tenga que confiar en la memoria del otro.";
-
-export const metadata: Metadata = {
-  title: "Gastos compartidos entre roommates",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
+export const metadata: Metadata = metadatosDeContenido("roommates", "es");
 
 const PREGUNTAS: Pregunta[] = [
   {
@@ -40,13 +34,7 @@ const PREGUNTAS: Pregunta[] = [
 
 export default function GastosEntreRoommates() {
   return (
-    <PaginaContenido
-      ruta={RUTA}
-      titulo={TITULO}
-      entradilla={ENTRADILLA}
-      preguntas={PREGUNTAS}
-      relacionadas={casosRelacionados(RUTA)}
-    >
+    <PaginaContenido clave="roommates" preguntas={PREGUNTAS} conRelacionadas>
       <p>
         Compartir vivienda tiene una diferencia importante con un viaje: no termina. Un viaje se
         liquida al volver y se olvida; los gastos de una casa se repiten cada mes, se acumulan y

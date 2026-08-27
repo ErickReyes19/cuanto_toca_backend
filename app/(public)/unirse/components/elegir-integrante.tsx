@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { unirseAGrupo } from "@/app/(protected)/grupos/actions";
 import { Button } from "@/components/ui/button";
+import { useDiccionario } from "@/lib/i18n/cliente";
 
 type Participante = { id: string; nombre: string; disponible: boolean };
 
@@ -16,6 +17,7 @@ export function ElegirIntegrante({
   codigo: string;
   participantes: Participante[];
 }) {
+  const t = useDiccionario();
   const router = useRouter();
   const [enviando, setEnviando] = React.useState(false);
   const [seleccion, setSeleccion] = React.useState<string | null>(null);
@@ -26,10 +28,10 @@ export function ElegirIntegrante({
     setEnviando(true);
     try {
       const { grupoId } = await unirseAGrupo(codigo, participanteId);
-      toast.success("Ya estás en el grupo.");
+      toast.success(t.unirse.yaEstas);
       router.push(`/grupos/${grupoId}`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo unir al grupo.");
+      toast.error(error instanceof Error ? error.message : t.unirse.errorUnirse);
       setEnviando(false);
     }
   }
@@ -38,7 +40,7 @@ export function ElegirIntegrante({
     <div className="space-y-4">
       {disponibles.length > 0 ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium">¿Cuál de estos eres tú?</p>
+          <p className="text-sm font-medium">{t.unirse.cualEresTu}</p>
           <div className="flex flex-wrap gap-2">
             {disponibles.map((p) => (
               <button
@@ -58,24 +60,21 @@ export function ElegirIntegrante({
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Todos los integrantes de la lista ya tienen cuenta vinculada. Puedes entrar como
-          alguien nuevo.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.unirse.todosVinculados}</p>
       )}
 
       <div className="flex flex-col gap-2">
         <Button onClick={() => unirse(seleccion ?? undefined)} disabled={enviando}>
           {enviando
-            ? "Entrando..."
+            ? t.unirse.entrando
             : seleccion
-              ? `Soy ${disponibles.find((p) => p.id === seleccion)?.nombre}`
-              : "Entrar como integrante nuevo"}
+              ? t.unirse.soy(disponibles.find((p) => p.id === seleccion)?.nombre ?? "")
+              : t.unirse.entrarComoNuevo}
         </Button>
 
         {seleccion ? (
           <Button variant="ghost" onClick={() => setSeleccion(null)} disabled={enviando}>
-            Mejor entro como alguien nuevo
+            {t.unirse.mejorNuevo}
           </Button>
         ) : null}
       </div>

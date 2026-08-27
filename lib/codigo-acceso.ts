@@ -8,6 +8,7 @@ import {
   generarCodigoAccesoEmailHtml,
   generarCodigoAccesoEmailTexto,
 } from "@/lib/templates/codigoAcceso";
+import { getDiccionario } from "@/lib/i18n/servidor";
 
 /** Minutos de vigencia del código. */
 export const VIGENCIA_MINUTOS = 10;
@@ -118,7 +119,7 @@ export async function emitirCodigoAcceso(usuario: {
       );
       return {
         ok: false,
-        error: "Ya te mandamos un código hace un momento. Revisa tu correo.",
+        error: (await getDiccionario()).errores.codigoReciente,
         esperaSegundos: Math.ceil(ESPERA_REENVIO_SEGUNDOS - transcurridos),
       };
     }
@@ -132,7 +133,7 @@ export async function emitirCodigoAcceso(usuario: {
     await enviarCodigoPorCorreo(usuario.email, usuario.nombre, codigo);
   } catch (error) {
     console.error("No se pudo enviar el código de acceso:", error);
-    return { ok: false, error: "No pudimos enviarte el código. Intenta de nuevo en un momento." };
+    return { ok: false, error: (await getDiccionario()).errores.codigoNoEnviado };
   }
 
   await prisma.$transaction([
@@ -165,7 +166,7 @@ export async function verificarCodigoAcceso(
   codigo: string
 ): Promise<ResultadoVerificacion> {
   const limpio = codigo.replace(/\D/g, "");
-  if (limpio.length !== 6) return { ok: false, error: "El código son 6 dígitos." };
+  if (limpio.length !== 6) return { ok: false, error: (await getDiccionario()).errores.codigoSeisDigitos };
 
   const registro = await prisma.codigoAcceso.findFirst({
     where: { usuarioId, usadoEn: null },
@@ -173,7 +174,7 @@ export async function verificarCodigoAcceso(
   });
 
   if (!registro) {
-    return { ok: false, error: "No hay ningún código pendiente. Pide uno nuevo." };
+    return { ok: false, error: (await getDiccionario()).errores.codigoSinPendiente };
   }
 
   if (registro.expiraEn.getTime() < Date.now()) {
@@ -181,7 +182,7 @@ export async function verificarCodigoAcceso(
       where: { id: registro.id },
       data: { usadoEn: new Date() },
     });
-    return { ok: false, error: "El código caducó. Pide uno nuevo." };
+    return { ok: false, error: (await getDiccionario()).errores.codigoCaducado };
   }
 
   if (registro.intentos >= MAX_INTENTOS) {
@@ -189,7 +190,7 @@ export async function verificarCodigoAcceso(
       where: { id: registro.id },
       data: { usadoEn: new Date() },
     });
-    return { ok: false, error: "Demasiados intentos. Pide un código nuevo." };
+    return { ok: false, error: (await getDiccionario()).errores.codigoDemasiadosIntentos };
   }
 
   if (!(await bcrypt.compare(limpio, registro.codigoHash))) {
@@ -200,12 +201,13 @@ export async function verificarCodigoAcceso(
     });
 
     const restantes = MAX_INTENTOS - actualizado.intentos;
+    const t = await getDiccionario();
     return {
       ok: false,
       error:
         restantes > 0
-          ? `Código incorrecto. Te ${restantes === 1 ? "queda 1 intento" : `quedan ${restantes} intentos`}.`
-          : "Demasiados intentos. Pide un código nuevo.",
+          ? t.errores.codigoIncorrecto(restantes)
+          : t.errores.codigoDemasiadosIntentos,
     };
   }
 

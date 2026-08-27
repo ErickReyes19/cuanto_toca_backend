@@ -1,6 +1,10 @@
+"use client";
+
 import { ArrowRight, PartyPopper } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { LOCALE_MONEDA } from "@/lib/i18n";
+import { useIdioma } from "@/lib/i18n/cliente";
 import { formatearMonto } from "@/lib/split/moneda";
 import type { Saldo, Transferencia } from "@/lib/split/tipos";
 
@@ -27,6 +31,10 @@ export function TablaSaldos({
   saldos: Saldo[];
   moneda: string;
 }) {
+  const { idioma, t } = useIdioma();
+  const localeUi = LOCALE_MONEDA[idioma];
+  const monto = (valor: number) => formatearMonto(valor, moneda, localeUi);
+
   return (
     <ul className="divide-y rounded-xl border">
       {saldos.map((saldo) => {
@@ -43,8 +51,10 @@ export function TablaSaldos({
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">{nombre}</p>
               <p className="text-xs text-muted-foreground">
-                Puso {formatearMonto(saldo.pagadoCentavos, moneda)} · le tocaba{" "}
-                {formatearMonto(saldo.debidoCentavos, moneda)}
+                {t.liquidacion.pusoLeTocaba(
+                  monto(saldo.pagadoCentavos),
+                  monto(saldo.debidoCentavos)
+                )}
               </p>
             </div>
 
@@ -59,11 +69,11 @@ export function TablaSaldos({
                 }
               >
                 {cero
-                  ? formatearMonto(0, moneda)
-                  : `${positivo ? "+" : "−"}${formatearMonto(Math.abs(saldo.saldoCentavos), moneda)}`}
+                  ? monto(0)
+                  : `${positivo ? "+" : "−"}${monto(Math.abs(saldo.saldoCentavos))}`}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                {cero ? "a mano" : positivo ? "le deben" : "debe"}
+                {cero ? t.liquidacion.aMano : positivo ? t.liquidacion.leDeben : t.liquidacion.debe}
               </p>
             </div>
           </li>
@@ -82,14 +92,14 @@ export function ListaTransferencias({
   transferencias: Transferencia[];
   moneda: string;
 }) {
+  const { idioma, t } = useIdioma();
+
   if (transferencias.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
         <PartyPopper className="size-8 text-emerald-600 dark:text-emerald-400" />
-        <p className="font-medium">Todos a mano</p>
-        <p className="text-sm text-muted-foreground">
-          No hay nada que pagar: las cuentas del grupo están cuadradas.
-        </p>
+        <p className="font-medium">{t.liquidacion.todosAMano}</p>
+        <p className="text-sm text-muted-foreground">{t.liquidacion.todosAManoDetalle}</p>
       </div>
     );
   }
@@ -105,7 +115,7 @@ export function ListaTransferencias({
           <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
           <span className="font-medium">{nombreDe(participantes, tx.aParticipanteId)}</span>
           <Badge variant="secondary" className="ml-auto tabular-nums">
-            {formatearMonto(tx.montoCentavos, moneda)}
+            {formatearMonto(tx.montoCentavos, moneda, LOCALE_MONEDA[idioma])}
           </Badge>
         </li>
       ))}

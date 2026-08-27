@@ -3,28 +3,17 @@ import type { Metadata } from "next";
 import { adsenseEstaConfigurado } from "@/lib/adsense";
 import { getCorreoContacto } from "@/lib/contenido";
 import { SITIO } from "@/lib/site";
-import { PaginaContenido } from "../components/pagina-contenido";
+import { PaginaContenido, metadatosDeContenido } from "../components/pagina-contenido";
 
-const RUTA = "/privacidad";
-const ENTRADILLA =
-  "Qué datos guarda Cuánto Toca, para qué los usa, con quién se comparten y cómo pedir que se borren.";
 
-export const metadata: Metadata = {
-  title: "Política de privacidad",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
-
-const ACTUALIZADO = "27 de agosto de 2026";
+export const metadata: Metadata = metadatosDeContenido("privacidad", "es");
 
 export default function Privacidad() {
   const correo = getCorreoContacto();
   const conAnuncios = adsenseEstaConfigurado();
 
   return (
-    <PaginaContenido ruta={RUTA} titulo="Política de privacidad" entradilla={ENTRADILLA}>
-      <p className="text-sm text-muted-foreground">Última actualización: {ACTUALIZADO}</p>
-
+    <PaginaContenido clave="privacidad" conFecha>
       <h2>Quiénes somos</h2>
       <p>
         {SITIO.nombre} es una herramienta para dividir gastos entre varias personas, disponible en{" "}

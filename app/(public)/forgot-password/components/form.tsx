@@ -3,10 +3,12 @@
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner"
+import { RUTAS } from "@/lib/i18n";
+import { useIdioma } from "@/lib/i18n/cliente";
 import { resetPassword } from "../actions";
 
 interface Props {
@@ -14,6 +16,7 @@ interface Props {
 }
 
 export default function ResetPasswordForm({ token }: Props) {
+    const { idioma, t } = useIdioma();
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showNew, setShowNew] = useState(false);
@@ -25,19 +28,17 @@ export default function ResetPasswordForm({ token }: Props) {
     const getErrorMessage = (error: unknown): string => {
         if (typeof error === "string" && error.trim()) return error;
         if (error instanceof Error && error.message.trim()) return error.message;
-        return "Error desconocido";
+        return t.contrasena.errorDesconocido;
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (newPassword.length < 6) {
-            toast.error(
-                "La contraseña debe tener al menos 6 caracteres",
-            );
+            toast.error(t.contrasena.minimoSeis);
             return;
         }
         if (newPassword !== confirmPassword) {
-            toast.info("Las contraseñas no coinciden");
+            toast.info(t.contrasena.noCoinciden);
             return;
         }
 
@@ -45,16 +46,16 @@ export default function ResetPasswordForm({ token }: Props) {
             try {
                 const res = await resetPassword(token, newPassword);
                 if (res === true) {
-                    toast.success("Contraseña cambiada con éxito");
-                    router.push("/");
+                    toast.success(t.contrasena.cambiada);
+                    router.push(RUTAS.inicio[idioma]);
                     return;
                 }
 
-                toast.error("Error al cambiar la contraseña", {
-                    description: "No se pudo actualizar la contraseña. Solicita un nuevo enlace.",
+                toast.error(t.contrasena.errorCambio, {
+                    description: t.contrasena.errorCambioDetalle,
                 });
             } catch (error) {
-                toast.error("Error al cambiar la contraseña", {
+                toast.error(t.contrasena.errorCambio, {
                     description: getErrorMessage(error),
                 });
             }
@@ -63,10 +64,12 @@ export default function ResetPasswordForm({ token }: Props) {
 
     return (
         <div className="max-w-md mx-auto mt-20 p-6 bg-gray-900 text-white rounded-lg border">
-            <h1 className="text-2xl font-bold mb-4">Restablecer contraseña</h1>
+            <h1 className="text-2xl font-bold mb-4">{t.contrasena.restablecer}</h1>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                    <label htmlFor="newPassword" className="block text-sm font-medium mb-1">Nueva Contraseña</label>
+                    <label htmlFor="newPassword" className="block text-sm font-medium mb-1">
+                        {t.contrasena.nuevaContrasena}
+                    </label>
                     <div className="relative">
                         <Input
                             id="newPassword"
@@ -79,6 +82,7 @@ export default function ResetPasswordForm({ token }: Props) {
                         <button
                             type="button"
                             onClick={() => setShowNew(!showNew)}
+                            aria-label={showNew ? t.contrasena.ocultarContrasena : t.contrasena.mostrarContrasena}
                             className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-white"
                         >
                             {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -87,7 +91,9 @@ export default function ResetPasswordForm({ token }: Props) {
                 </div>
 
                 <div>
-                    <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1">Confirmar Contraseña</label>
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1">
+                        {t.contrasena.confirmarContrasena}
+                    </label>
                     <div className="relative">
                         <Input
                             id="confirmPassword"
@@ -100,6 +106,9 @@ export default function ResetPasswordForm({ token }: Props) {
                         <button
                             type="button"
                             onClick={() => setShowConfirm(!showConfirm)}
+                            aria-label={
+                                showConfirm ? t.contrasena.ocultarConfirmacion : t.contrasena.mostrarConfirmacion
+                            }
                             className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-white"
                         >
                             {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -112,7 +121,7 @@ export default function ResetPasswordForm({ token }: Props) {
                     disabled={isPending}
                     className="w-full bg-blue-600 hover:bg-blue-700"
                 >
-                    {isPending ? "Cambiando..." : "Cambiar Contraseña"}
+                    {isPending ? t.contrasena.cambiando : t.contrasena.cambiarContrasena}
                 </Button>
             </form>
         </div>

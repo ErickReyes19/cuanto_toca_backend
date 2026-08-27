@@ -3,23 +3,16 @@ import Link from "next/link";
 
 import { getCorreoContacto } from "@/lib/contenido";
 import { SITIO } from "@/lib/site";
-import { PaginaContenido } from "../components/pagina-contenido";
+import { PaginaContenido, metadatosDeContenido } from "../components/pagina-contenido";
 
-const RUTA = "/contacto";
-const ENTRADILLA =
-  "Escríbenos si algo no funciona, si quieres borrar tu cuenta o si se te ocurre cómo mejorar la herramienta.";
 
-export const metadata: Metadata = {
-  title: "Contacto",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
+export const metadata: Metadata = metadatosDeContenido("contacto", "es");
 
 export default function Contacto() {
   const correo = getCorreoContacto();
 
   return (
-    <PaginaContenido ruta={RUTA} titulo="Contacto" entradilla={ENTRADILLA}>
+    <PaginaContenido clave="contacto">
       <p>
         {SITIO.nombre} lo mantiene un equipo pequeño. Leemos todos los correos, aunque a veces la
         respuesta tarda un par de días.

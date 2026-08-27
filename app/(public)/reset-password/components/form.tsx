@@ -3,23 +3,27 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 
 import { resetPassword } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { schemaResetPassword, type TSchemaResetPassword } from "../schema";
+import { useDiccionario } from "@/lib/i18n/cliente";
+import { crearSchemaResetPassword, type TSchemaResetPassword } from "../schema";
 
 export default function ResetPassword({ username }: { username: string }) {
+  const t = useDiccionario();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const schema = useMemo(() => crearSchemaResetPassword(t), [t]);
+
   const form = useForm<TSchemaResetPassword>({
-    resolver: zodResolver(schemaResetPassword),
+    resolver: zodResolver(schema),
     defaultValues: { nueva: "", confirmar: "" },
   });
 
@@ -41,7 +45,7 @@ export default function ResetPassword({ username }: { username: string }) {
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel>Nueva contraseña</FieldLabel>
+            <FieldLabel>{t.contrasena.nuevaContrasena}</FieldLabel>
             <FieldContent>
               <div className="relative">
                 <Input
@@ -55,13 +59,13 @@ export default function ResetPassword({ username }: { username: string }) {
                   type="button"
                   onClick={() => setShowNew(!showNew)}
                   className="absolute inset-y-0 right-3 flex items-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label={showNew ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={showNew ? t.contrasena.ocultarContrasena : t.contrasena.mostrarContrasena}
                 >
                   {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </FieldContent>
-            <FieldDescription>Mínimo 8 caracteres.</FieldDescription>
+            <FieldDescription>{t.contrasena.minimoOcho}</FieldDescription>
             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
           </Field>
         )}
@@ -72,7 +76,7 @@ export default function ResetPassword({ username }: { username: string }) {
         control={form.control}
         render={({ field, fieldState }) => (
           <Field data-invalid={fieldState.invalid}>
-            <FieldLabel>Confirmar contraseña</FieldLabel>
+            <FieldLabel>{t.contrasena.confirmarContrasena}</FieldLabel>
             <FieldContent>
               <div className="relative">
                 <Input
@@ -86,20 +90,22 @@ export default function ResetPassword({ username }: { username: string }) {
                   type="button"
                   onClick={() => setShowConfirm(!showConfirm)}
                   className="absolute inset-y-0 right-3 flex items-center rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                  aria-label={showConfirm ? "Ocultar confirmación" : "Mostrar confirmación"}
+                  aria-label={
+                    showConfirm ? t.contrasena.ocultarConfirmacion : t.contrasena.mostrarConfirmacion
+                  }
                 >
                   {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </FieldContent>
-            <FieldDescription>Repite la contraseña para confirmar.</FieldDescription>
+            <FieldDescription>{t.contrasena.repiteContrasena}</FieldDescription>
             {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
           </Field>
         )}
       />
 
       <Button type="submit" disabled={isPending} className="h-10 w-full rounded-xl font-bold shadow-md shadow-foreground/10">
-        {isPending ? "Guardando..." : "Actualizar contraseña"}
+        {isPending ? t.contrasena.guardando : t.contrasena.actualizar}
       </Button>
     </form>
   );

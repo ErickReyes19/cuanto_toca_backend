@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { loginConGoogle } from "@/auth";
+import { useIdioma } from "@/lib/i18n/cliente";
 
 /** API mínima de Google Identity Services que usamos. */
 type GoogleIdentity = {
@@ -48,15 +49,23 @@ const SRC = "https://accounts.google.com/gsi/client";
  * Carga el script de Google una sola vez por pestaña, aunque haya varios
  * botones montados. Con `strict-dynamic` en el CSP, un script insertado por
  * nuestro bundle (que ya va firmado con nonce) hereda la confianza.
+ *
+ * El idioma del botón lo decide el `hl` de esta URL, no la opción `locale` de
+ * `renderButton`: esa última se ignora en la práctica. Google solo admite una
+ * instancia por documento, así que el idioma queda fijado en la primera carga;
+ * quien cambie de idioma sin recargar verá el botón de Google en el anterior
+ * hasta la siguiente visita, que es como llega cualquiera desde un buscador.
  */
 let cargaGoogle: Promise<void> | null = null;
 
-function cargarGoogle() {
+function cargarGoogle(idioma: string) {
   if (typeof window === "undefined") return Promise.reject(new Error("solo en el navegador"));
   if (window.google?.accounts?.id) return Promise.resolve();
 
+  const src = `${SRC}?hl=${encodeURIComponent(idioma)}`;
+
   cargaGoogle ??= new Promise<void>((resolver, rechazar) => {
-    const existente = document.querySelector<HTMLScriptElement>(`script[src="${SRC}"]`);
+    const existente = document.querySelector<HTMLScriptElement>(`script[src^="${SRC}"]`);
     const script = existente ?? document.createElement("script");
 
     script.addEventListener("load", () => resolver(), { once: true });
@@ -70,7 +79,7 @@ function cargarGoogle() {
     );
 
     if (!existente) {
-      script.src = SRC;
+      script.src = src;
       script.async = true;
       script.defer = true;
       document.head.appendChild(script);
@@ -89,22 +98,25 @@ export function BotonGoogle({
   redirect?: string;
   texto?: "signin_with" | "signup_with" | "continue_with";
 }) {
+  const { idioma, t } = useIdioma();
   const router = useRouter();
   const contenedor = React.useRef<HTMLDivElement>(null);
   const [estado, setEstado] = React.useState<"cargando" | "listo" | "error">("cargando");
   const [entrando, setEntrando] = React.useState(false);
 
-  // `redirect` y `texto` se leen dentro del callback; con refs evitamos volver
-  // a inicializar Google (y a repintar su botón) si el padre re-renderiza.
-  const opciones = React.useRef({ redirect, texto });
+  // `redirect`, `texto`, los textos y el idioma se leen dentro del efecto;
+  // con refs evitamos volver a inicializar Google (y a repintar su botón) si
+  // el padre re-renderiza o si se cambia de idioma sin recargar. Google avisa
+  // por consola cuando se le llama a `initialize` de más.
+  const opciones = React.useRef({ redirect, texto, t, idioma });
   React.useEffect(() => {
-    opciones.current = { redirect, texto };
+    opciones.current = { redirect, texto, t, idioma };
   });
 
   React.useEffect(() => {
     let cancelado = false;
 
-    cargarGoogle()
+    cargarGoogle(opciones.current.idioma)
       .then(() => {
         if (cancelado || !contenedor.current || !window.google) return;
 
@@ -115,7 +127,7 @@ export function BotonGoogle({
           cancel_on_tap_outside: true,
           callback: async ({ credential }) => {
             if (!credential) {
-              toast.error("Google no devolvió una credencial.");
+              toast.error(opciones.current.t.auth.googleSinCredencial);
               return;
             }
 
@@ -128,11 +140,11 @@ export function BotonGoogle({
                 return;
               }
 
-              toast.success("Sesión iniciada con Google.");
+              toast.success(opciones.current.t.auth.googleExito);
               router.push(resultado.redirect ?? opciones.current.redirect);
               router.refresh();
             } catch {
-              toast.error("No pudimos iniciar sesión con Google.");
+              toast.error(opciones.current.t.auth.googleError);
             } finally {
               setEntrando(false);
             }
@@ -146,7 +158,7 @@ export function BotonGoogle({
           shape: "pill",
           logo_alignment: "center",
           text: opciones.current.texto,
-          locale: "es",
+          locale: opciones.current.idioma,
           width: Math.min(400, Math.round(contenedor.current.getBoundingClientRect().width) || 320),
         });
 
@@ -164,7 +176,7 @@ export function BotonGoogle({
   if (estado === "error") {
     return (
       <p className="rounded-xl border border-dashed px-3 py-2.5 text-center text-xs text-muted-foreground">
-        No se pudo cargar el acceso con Google. Revisa tu conexión o entra con tu correo.
+        {t.auth.googleNoCarga}
       </p>
     );
   }
@@ -180,7 +192,7 @@ export function BotonGoogle({
 
       {entrando ? (
         <div className="absolute inset-0 grid place-items-center rounded-full bg-background/70 text-xs font-medium">
-          Entrando...
+          {t.login.entrando}
         </div>
       ) : null}
     </div>

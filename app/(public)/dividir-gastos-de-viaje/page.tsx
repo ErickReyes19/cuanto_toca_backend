@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
 
-import { casosRelacionados } from "@/lib/contenido";
 import { Calculadora } from "../components/calculadora";
-import { PaginaContenido, type Pregunta } from "../components/pagina-contenido";
+import {
+  PaginaContenido,
+  metadatosDeContenido,
+  type Pregunta,
+} from "../components/pagina-contenido";
 
-const RUTA = "/dividir-gastos-de-viaje";
-const TITULO = "Cómo dividir los gastos de un viaje entre amigos";
-const ENTRADILLA =
-  "Gasolina, hospedaje, comidas y entradas pagadas por personas distintas. Así se ordena todo y se sabe quién le debe a quién sin sacar cuentas a mano.";
-
-export const metadata: Metadata = {
-  title: "Dividir gastos de un viaje entre amigos",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
+export const metadata: Metadata = metadatosDeContenido("viaje", "es");
 
 const PREGUNTAS: Pregunta[] = [
   {
@@ -40,13 +34,7 @@ const PREGUNTAS: Pregunta[] = [
 
 export default function DividirGastosDeViaje() {
   return (
-    <PaginaContenido
-      ruta={RUTA}
-      titulo={TITULO}
-      entradilla={ENTRADILLA}
-      preguntas={PREGUNTAS}
-      relacionadas={casosRelacionados(RUTA)}
-    >
+    <PaginaContenido clave="viaje" preguntas={PREGUNTAS} conRelacionadas>
       <p>
         En un viaje el problema no es el dinero, es la memoria. Uno puso la gasolina, otro pagó el
         Airbnb con su tarjeta, alguien cubrió las entradas del museo y tres personas se saltaron la

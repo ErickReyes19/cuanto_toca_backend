@@ -4,6 +4,8 @@ import { Users } from "lucide-react";
 import * as React from "react";
 
 import { Input } from "@/components/ui/input";
+import { LOCALE_MONEDA } from "@/lib/i18n";
+import { useIdioma } from "@/lib/i18n/cliente";
 import { aUnidadMenor, formatearMonto, getMoneda } from "@/lib/split/moneda";
 
 export type Pagador = { participanteId: string; montoCentavos: number };
@@ -29,6 +31,8 @@ export function SelectorPagadores({
   pagadores: Pagador[];
   onChange: (pagadores: Pagador[]) => void;
 }) {
+  const { idioma, t } = useIdioma();
+  const localeUi = LOCALE_MONEDA[idioma];
   const decimales = getMoneda(moneda).decimales;
   const varios = pagadores.length > 1;
   const asignado = pagadores.reduce((suma, p) => suma + p.montoCentavos, 0);
@@ -99,14 +103,14 @@ export function SelectorPagadores({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm font-medium">¿Quién puso el dinero?</span>
+        <span className="text-sm font-medium">{t.pagadores.quienPuso}</span>
         {varios ? (
           <button
             type="button"
             onClick={repartirEntreLosMarcados}
             className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >
-            Repartir en partes iguales
+            {t.pagadores.repartirIgual}
           </button>
         ) : null}
       </div>
@@ -140,7 +144,7 @@ export function SelectorPagadores({
               <div key={pagador.participanteId} className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm">{persona?.nombre ?? "—"}</span>
                 <Input
-                  aria-label={`Cuánto puso ${persona?.nombre ?? ""}`}
+                  aria-label={t.pagadores.cuantoPuso(persona?.nombre ?? "")}
                   inputMode="decimal"
                   placeholder={decimales ? "0.00" : "0"}
                   value={textoDe(pagador)}
@@ -153,16 +157,16 @@ export function SelectorPagadores({
 
           <p className={`text-xs ${diferencia === 0 ? "text-muted-foreground" : "text-destructive"}`}>
             {diferencia === 0
-              ? `Cuadra con el total: ${formatearMonto(totalCentavos, moneda)}`
+              ? t.pagadores.cuadra(formatearMonto(totalCentavos, moneda, localeUi))
               : diferencia > 0
-                ? `Faltan ${formatearMonto(diferencia, moneda)} por asignar.`
-                : `Se pasan por ${formatearMonto(Math.abs(diferencia), moneda)}.`}
+                ? t.pagadores.faltan(formatearMonto(diferencia, moneda, localeUi))
+                : t.pagadores.sePasan(formatearMonto(Math.abs(diferencia), moneda, localeUi))}
           </p>
         </div>
       ) : (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Users className="size-3.5" />
-          Marca a más de una persona si pagaron entre varios.
+          {t.pagadores.pista}
         </p>
       )}
     </div>

@@ -10,7 +10,7 @@ import type { Prisma } from "@prisma/client";
 
 import {
   TSchemaResetPassword,
-  schemaResetPassword,
+  crearSchemaResetPassword,
 } from "@/app/(public)/reset-password/schema";
 
 import { schemaSignIn, TSchemaSignIn } from "@/lib/shemas";
@@ -26,6 +26,7 @@ import {
   emitirCodigoAcceso,
   verificarCodigoAcceso,
 } from "@/lib/codigo-acceso";
+import { getDiccionario } from "@/lib/i18n/servidor";
 
 // ------------------------------
 // JWT CONFIG
@@ -165,7 +166,7 @@ export const login = async (
   const parsed = schemaSignIn.safeParse(credentials);
 
   if (!parsed.success) {
-    return { error: "Usuario o contraseña inválidos" };
+    return { error: (await getDiccionario()).errores.credenciales };
   }
 
   const { usuario, contrasena } = parsed.data;
@@ -173,7 +174,7 @@ export const login = async (
   const authResult = await authenticateDB(usuario, contrasena);
 
   if (!authResult) {
-    return { error: "Usuario o contraseña inválidos" };
+    return { error: (await getDiccionario()).errores.credenciales };
   }
 
   await setSessionCookie(authResult.token);
@@ -193,16 +194,17 @@ export const resetPassword = async (
   credentials: TSchemaResetPassword,
   username: string
 ) => {
-  const parsed = schemaResetPassword.safeParse(credentials);
+  const t = await getDiccionario();
+  const parsed = crearSchemaResetPassword(t).safeParse(credentials);
 
   if (!parsed.success) {
-    return { error: "Error al cambiar la contraseña" };
+    return { error: t.errores.cambioContrasena };
   }
 
   const token = await changePassword(username, parsed.data.confirmar);
 
   if (!token) {
-    return { error: "Error al cambiar la contraseña" };
+    return { error: t.errores.cambioContrasena };
   }
 
   await setSessionCookie(token);
@@ -355,7 +357,7 @@ async function usuarioDisponibleDesdeEmail(email: string) {
  */
 export const loginConGoogle = async (credential: string, redirect: string) => {
   if (typeof credential !== "string" || !credential.trim()) {
-    return { error: "No recibimos la credencial de Google." };
+    return { error: (await getDiccionario()).errores.googleSinCredencial };
   }
 
   let perfil;
@@ -363,11 +365,11 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
     perfil = await verificarIdTokenGoogle(credential);
   } catch (err) {
     console.error("Google ID token inválido:", err);
-    return { error: "No pudimos validar tu cuenta de Google. Intenta de nuevo." };
+    return { error: (await getDiccionario()).errores.googleSinValidar };
   }
 
   if (!perfil.emailVerificado) {
-    return { error: "Tu correo de Google no está verificado." };
+    return { error: (await getDiccionario()).errores.googleCorreoSinVerificar };
   }
 
   try {
@@ -394,7 +396,7 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
         const rol = await prisma.rol.findUnique({ where: { nombre: ROL_POR_DEFECTO } });
         if (!rol) {
           console.error(`Falta el rol ${ROL_POR_DEFECTO}. Corre: npx prisma db seed`);
-          return { error: "El servidor no está configurado. Intenta más tarde." };
+          return { error: (await getDiccionario()).errores.servidorSinConfigurar };
         }
 
         user = await prisma.usuarios.create({
@@ -417,7 +419,7 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
     }
 
     if (!toBooleanFlag(user.activo)) {
-      return { error: "Tu cuenta está desactivada. Contacta a un administrador." };
+      return { error: (await getDiccionario()).errores.cuentaDesactivada };
     }
 
     const now = new Date();
@@ -447,7 +449,7 @@ export const loginConGoogle = async (credential: string, redirect: string) => {
     };
   } catch (err) {
     console.error("loginConGoogle error:", err);
-    return { error: "No pudimos iniciar sesión con Google." };
+    return { error: (await getDiccionario()).errores.googleFallo };
   }
 };
 
@@ -551,11 +553,11 @@ export const iniciarSesionConCodigo = async (
   redirect: string
 ) => {
   const parsed = schemaSignIn.safeParse(credentials);
-  if (!parsed.success) return { error: "Usuario o contraseña inválidos" };
+  if (!parsed.success) return { error: (await getDiccionario()).errores.credenciales };
 
   try {
     const user = await credencialesValidas(parsed.data.usuario, parsed.data.contrasena);
-    if (!user) return { error: "Usuario o contraseña inválidos" };
+    if (!user) return { error: (await getDiccionario()).errores.credenciales };
 
     if (!codigoDeAccesoActivo()) {
       console.warn(
@@ -577,7 +579,7 @@ export const iniciarSesionConCodigo = async (
     return { requiereCodigo: true as const, enmascarado: emision.enmascarado };
   } catch (err) {
     console.error("iniciarSesionConCodigo error:", err);
-    return { error: "No pudimos iniciar sesión. Intenta de nuevo." };
+    return { error: (await getDiccionario()).errores.sesionFallo };
   }
 };
 
@@ -585,7 +587,7 @@ export const iniciarSesionConCodigo = async (
 export const confirmarCodigoDeAcceso = async (codigo: string, redirect: string) => {
   const usuarioId = await leerPendiente();
   if (!usuarioId) {
-    return { error: "Tu solicitud caducó. Vuelve a iniciar sesión." };
+    return { error: (await getDiccionario()).errores.sesionCaducada };
   }
 
   try {
@@ -599,20 +601,20 @@ export const confirmarCodigoDeAcceso = async (codigo: string, redirect: string) 
 
     if (!user || !toBooleanFlag(user.activo)) {
       await borrarPendiente();
-      return { error: "Tu cuenta no está disponible." };
+      return { error: (await getDiccionario()).errores.cuentaNoDisponible };
     }
 
     return abrirSesion(user, redirect);
   } catch (err) {
     console.error("confirmarCodigoDeAcceso error:", err);
-    return { error: "No pudimos validar el código." };
+    return { error: (await getDiccionario()).errores.codigoSinValidar };
   }
 };
 
 /** Manda otro código al mismo usuario de la solicitud en curso. */
 export const reenviarCodigoDeAcceso = async () => {
   const usuarioId = await leerPendiente();
-  if (!usuarioId) return { error: "Tu solicitud caducó. Vuelve a iniciar sesión." };
+  if (!usuarioId) return { error: (await getDiccionario()).errores.sesionCaducada };
 
   const user = await prisma.usuarios.findUnique({
     where: { id: usuarioId },
@@ -621,7 +623,7 @@ export const reenviarCodigoDeAcceso = async () => {
 
   if (!user || !toBooleanFlag(user.activo)) {
     await borrarPendiente();
-    return { error: "Tu cuenta no está disponible." };
+    return { error: (await getDiccionario()).errores.cuentaNoDisponible };
   }
 
   const emision = await emitirCodigoAcceso(user);
@@ -717,7 +719,7 @@ export const iniciarRegistroConCodigo = async (
 ) => {
   try {
     const existente = await prisma.usuarios.findUnique({ where: { email: datos.email } });
-    if (existente) return { error: "Ese correo ya tiene una cuenta. Inicia sesión." };
+    if (existente) return { error: (await getDiccionario()).errores.correoYaRegistrado };
 
     // Con el segundo paso apagado, el registro se comporta como antes.
     if (!codigoDeAccesoActivo()) {
@@ -729,7 +731,7 @@ export const iniciarRegistroConCodigo = async (
         contrasenaHash: await bcrypt.hash(datos.contrasena, 10),
       });
 
-      if (!user) return { error: "El servidor no está configurado. Intenta más tarde." };
+      if (!user) return { error: (await getDiccionario()).errores.servidorSinConfigurar };
       return abrirSesion(user, redirect);
     }
 
@@ -745,14 +747,14 @@ export const iniciarRegistroConCodigo = async (
     return { requiereCodigo: true as const, enmascarado: emision.enmascarado };
   } catch (err) {
     console.error("iniciarRegistroConCodigo error:", err);
-    return { error: "No pudimos crear tu cuenta. Intenta de nuevo." };
+    return { error: (await getDiccionario()).errores.registroFallo };
   }
 };
 
 /** Paso 2 del registro: con el código correcto recién se crea la cuenta. */
 export const confirmarRegistroConCodigo = async (codigo: string, redirect: string) => {
   const email = await leerRegistroEnCurso();
-  if (!email) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+  if (!email) return { error: (await getDiccionario()).errores.registroCaducado };
 
   try {
     const confirmacion = await confirmarRegistroPendiente(email, codigo);
@@ -762,11 +764,11 @@ export const confirmarRegistroConCodigo = async (codigo: string, redirect: strin
     const existente = await prisma.usuarios.findUnique({ where: { email } });
     if (existente) {
       await borrarRegistroEnCurso();
-      return { error: "Ese correo ya tiene una cuenta. Inicia sesión." };
+      return { error: (await getDiccionario()).errores.correoYaRegistrado };
     }
 
     const user = await crearCuenta(confirmacion);
-    if (!user) return { error: "El servidor no está configurado. Intenta más tarde." };
+    if (!user) return { error: (await getDiccionario()).errores.servidorSinConfigurar };
 
     await borrarRegistroEnCurso();
     console.info(`[registro] cuenta creada y correo verificado: ${user.usuario}`);
@@ -774,17 +776,17 @@ export const confirmarRegistroConCodigo = async (codigo: string, redirect: strin
     return abrirSesion(user, redirect);
   } catch (err) {
     console.error("confirmarRegistroConCodigo error:", err);
-    return { error: "No pudimos completar tu registro." };
+    return { error: (await getDiccionario()).errores.registroIncompleto };
   }
 };
 
 /** Manda otro código al correo del registro en curso. */
 export const reenviarCodigoRegistro = async () => {
   const email = await leerRegistroEnCurso();
-  if (!email) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+  if (!email) return { error: (await getDiccionario()).errores.registroCaducado };
 
   const pendiente = await prisma.registroPendiente.findUnique({ where: { email } });
-  if (!pendiente) return { error: "Tu solicitud caducó. Vuelve a registrarte." };
+  if (!pendiente) return { error: (await getDiccionario()).errores.registroCaducado };
 
   const emision = await emitirRegistroPendiente({
     nombre: pendiente.nombre,

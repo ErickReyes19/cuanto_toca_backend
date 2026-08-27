@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
 
-import { casosRelacionados } from "@/lib/contenido";
 import { Calculadora } from "../components/calculadora";
-import { PaginaContenido, type Pregunta } from "../components/pagina-contenido";
+import {
+  PaginaContenido,
+  metadatosDeContenido,
+  type Pregunta,
+} from "../components/pagina-contenido";
 
-const RUTA = "/dividir-la-cuenta-del-restaurante";
-const TITULO = "Cómo dividir la cuenta del restaurante sin pelear";
-const ENTRADILLA =
-  "Uno pidió entrada y postre, otro solo una limonada, y la propina va aparte. Así se reparte la cuenta de forma justa en menos de un minuto en la mesa.";
-
-export const metadata: Metadata = {
-  title: "Dividir la cuenta del restaurante",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
+export const metadata: Metadata = metadatosDeContenido("restaurante", "es");
 
 const PREGUNTAS: Pregunta[] = [
   {
@@ -40,13 +34,7 @@ const PREGUNTAS: Pregunta[] = [
 
 export default function DividirLaCuentaDelRestaurante() {
   return (
-    <PaginaContenido
-      ruta={RUTA}
-      titulo={TITULO}
-      entradilla={ENTRADILLA}
-      preguntas={PREGUNTAS}
-      relacionadas={casosRelacionados(RUTA)}
-    >
+    <PaginaContenido clave="restaurante" preguntas={PREGUNTAS} conRelacionadas>
       <p>
         La cuenta llega a la mesa y empieza el ritual: alguien la toma, la mira de reojo y propone
         dividir entre el número de personas. Casi siempre hay uno que se queda callado aunque pidió

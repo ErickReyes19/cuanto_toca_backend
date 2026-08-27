@@ -2,27 +2,16 @@ import type { Metadata } from "next";
 
 import { getCorreoContacto } from "@/lib/contenido";
 import { SITIO } from "@/lib/site";
-import { PaginaContenido } from "../components/pagina-contenido";
+import { PaginaContenido, metadatosDeContenido } from "../components/pagina-contenido";
 
-const RUTA = "/terminos";
-const ENTRADILLA =
-  "Las reglas para usar Cuánto Toca: qué puedes esperar del servicio y qué esperamos de ti.";
 
-export const metadata: Metadata = {
-  title: "Términos de uso",
-  description: ENTRADILLA,
-  alternates: { canonical: RUTA },
-};
-
-const ACTUALIZADO = "27 de agosto de 2026";
+export const metadata: Metadata = metadatosDeContenido("terminos", "es");
 
 export default function Terminos() {
   const correo = getCorreoContacto();
 
   return (
-    <PaginaContenido ruta={RUTA} titulo="Términos de uso" entradilla={ENTRADILLA}>
-      <p className="text-sm text-muted-foreground">Última actualización: {ACTUALIZADO}</p>
-
+    <PaginaContenido clave="terminos" conFecha>
       <h2>Qué es este servicio</h2>
       <p>
         {SITIO.nombre} es una herramienta de cálculo que te ayuda a repartir gastos entre varias

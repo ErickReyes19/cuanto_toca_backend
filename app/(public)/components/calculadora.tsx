@@ -23,6 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LOCALE_MONEDA, RUTAS } from "@/lib/i18n";
+import { useIdioma } from "@/lib/i18n/cliente";
+import { etiquetaMoneda } from "@/lib/i18n/monedas";
 import { simplificarDeudas } from "@/lib/split/liquidacion";
 import { MONEDAS, aUnidadMenor, formatearMonto } from "@/lib/split/moneda";
 import { repartirGasto } from "@/lib/split/reparto";
@@ -63,29 +66,8 @@ export type GrupoLocal = {
   gastos: GastoLocal[];
 };
 
-/** Las dos formas de usar la app. Se elige antes de anotar nada. */
-const TIPOS_GRUPO = [
-  {
-    valor: "VIAJE_REUNION" as const,
-    titulo: "Salida o viaje",
-    detalle: "Cada gasto se divide entre quienes participaron.",
-    Icono: Plane,
-  },
-  {
-    valor: "DESPENSA_FAMILIAR" as const,
-    titulo: "Despensa",
-    detalle: "Producto por producto, marcando a quién le toca cada uno.",
-    Icono: ShoppingCart,
-  },
-];
-
 const nuevoId = () =>
   globalThis.crypto?.randomUUID?.() ?? `tmp-${Math.random().toString(36).slice(2)}`;
-
-/** Base UI muestra el valor crudo si no se le pasa el mapa de etiquetas. */
-const ETIQUETAS_MONEDA = Object.fromEntries(
-  MONEDAS.map((m) => [m.codigo, `${m.codigo} · ${m.nombre}`])
-);
 
 function grupoVacio(moneda: string, tipo: TipoGrupoLocal): GrupoLocal {
   return { nombre: "", moneda, tipo, participantes: [], gastos: [] };
@@ -101,10 +83,35 @@ export function Calculadora({
 }: {
   tipoInicial?: TipoGrupoLocal;
 } = {}) {
+  const { idioma, t } = useIdioma();
+  const localeUi = LOCALE_MONEDA[idioma];
+
   // El borrador vive en localStorage, no en estado de React: así sobrevive
   // recargas y no hace falta ningún efecto de sincronización.
   const crudo = useAlmacenamientoLocal(CLAVE_BORRADOR);
   const monedaLocal = useMonedaSugerida();
+
+  /** Las dos formas de usar la app. Se elige antes de anotar nada. */
+  const tiposGrupo = [
+    {
+      valor: "VIAJE_REUNION" as const,
+      titulo: t.calculadora.tipoViaje,
+      detalle: t.calculadora.tipoViajeDetalle,
+      Icono: Plane,
+    },
+    {
+      valor: "DESPENSA_FAMILIAR" as const,
+      titulo: t.calculadora.tipoDespensa,
+      detalle: t.calculadora.tipoDespensaDetalle,
+      Icono: ShoppingCart,
+    },
+  ];
+
+  /** Base UI muestra el valor crudo si no se le pasa el mapa de etiquetas. */
+  const etiquetasMoneda = React.useMemo(
+    () => Object.fromEntries(MONEDAS.map((m) => [m.codigo, etiquetaMoneda(m.codigo, idioma)])),
+    [idioma]
+  );
 
   const grupo = React.useMemo<GrupoLocal>(() => {
     if (crudo) {
@@ -170,7 +177,7 @@ export function Calculadora({
     const limpio = nombre.trim();
     if (!limpio) return;
     if (participantes.length >= 50) {
-      toast.error("Máximo 50 integrantes en la calculadora.");
+      toast.error(t.calculadora.maximoIntegrantes);
       return;
     }
     setGrupo((g) => ({
@@ -205,7 +212,7 @@ export function Calculadora({
 
   function limpiarTodo() {
     setGrupo(() => grupoVacio(moneda, tipoInicial));
-    toast.success("Se borró el cálculo.");
+    toast.success(t.calculadora.calculoBorrado);
   }
 
   return (
@@ -213,16 +220,14 @@ export function Calculadora({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="size-5" /> 1. El grupo
+            <Users className="size-5" /> {t.calculadora.pasoGrupo}
           </CardTitle>
-          <CardDescription>
-            Elige el tipo, ponle nombre y agrega a quienes participaron.
-          </CardDescription>
+          <CardDescription>{t.calculadora.pasoGrupoDetalle}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* El tipo cambia cómo se piensa el gasto: por salida o por producto. */}
           <div className="grid gap-2 sm:grid-cols-2">
-            {TIPOS_GRUPO.map((opcion) => {
+            {tiposGrupo.map((opcion) => {
               const activo = grupo.tipo === opcion.valor;
               return (
                 <button
@@ -250,8 +255,8 @@ export function Calculadora({
             <Input
               placeholder={
                 grupo.tipo === "DESPENSA_FAMILIAR"
-                  ? "Ej. Súper de la quincena"
-                  : "Ej. Playa con los muchachos"
+                  ? t.calculadora.nombreDespensa
+                  : t.calculadora.nombreViaje
               }
               value={grupo.nombre}
               onChange={(e) => setGrupo((g) => ({ ...g, nombre: e.target.value }))}
@@ -259,16 +264,16 @@ export function Calculadora({
             />
             <Select
               value={moneda}
-              items={ETIQUETAS_MONEDA}
+              items={etiquetasMoneda}
               onValueChange={(valor) => setGrupo((g) => ({ ...g, moneda: valor ?? g.moneda }))}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Moneda" />
+                <SelectValue placeholder={t.calculadora.moneda} />
               </SelectTrigger>
               <SelectContent>
                 {MONEDAS.map((m) => (
                   <SelectItem key={m.codigo} value={m.codigo}>
-                    {m.codigo} · {m.nombre}
+                    {etiquetaMoneda(m.codigo, idioma)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -285,7 +290,7 @@ export function Calculadora({
                   <button
                     type="button"
                     onClick={() => quitarParticipante(p.id)}
-                    aria-label={`Quitar a ${p.nombre}`}
+                    aria-label={t.calculadora.quitarA(p.nombre)}
                     className="rounded-full p-0.5 hover:bg-foreground/10"
                   >
                     <Trash2 className="size-3.5" />
@@ -294,9 +299,7 @@ export function Calculadora({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Todavía no hay nadie. Agrega al menos dos personas.
-            </p>
+            <p className="text-sm text-muted-foreground">{t.calculadora.sinIntegrantes}</p>
           )}
         </CardContent>
       </Card>
@@ -304,14 +307,14 @@ export function Calculadora({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="size-5" /> 2. Los gastos
+            <Wallet className="size-5" /> {t.calculadora.pasoGastos}
           </CardTitle>
-          <CardDescription>Quién puso qué. Cada gasto se divide entre quienes marques.</CardDescription>
+          <CardDescription>{t.calculadora.pasoGastosDetalle}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {participantes.length < 2 ? (
             <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Agrega al menos dos integrantes para empezar a registrar gastos.
+              {t.calculadora.faltanIntegrantes}
             </p>
           ) : (
             <FormularioGasto
@@ -326,27 +329,24 @@ export function Calculadora({
               {gastos.map((gasto) => {
                 const nombresPago = gasto.pagadores
                   .map((x) => participantes.find((p) => p.id === x.participanteId)?.nombre)
-                  .filter(Boolean);
+                  .filter((nombre): nombre is string => Boolean(nombre));
                 return (
                   <li key={gasto.id} className="flex items-center gap-3 p-3">
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{gasto.descripcion}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {nombresPago.length > 1
-                          ? `Pagaron ${nombresPago.join(" y ")}`
-                          : `Pagó ${nombresPago[0] ?? "—"}`}{" "}
-                        · entre {gasto.participanteIds.length}{" "}
-                        {gasto.participanteIds.length === 1 ? "persona" : "personas"}
+                        {t.calculadora.pagaron(nombresPago)} ·{" "}
+                        {t.calculadora.entrePersonas(gasto.participanteIds.length)}
                       </p>
                     </div>
                     <span className="shrink-0 font-semibold tabular-nums">
-                      {formatearMonto(gasto.montoCentavos, moneda)}
+                      {formatearMonto(gasto.montoCentavos, moneda, localeUi)}
                     </span>
                     <Button
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => quitarGasto(gasto.id)}
-                      aria-label="Eliminar gasto"
+                      aria-label={t.calculadora.eliminarGasto}
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -362,16 +362,16 @@ export function Calculadora({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <CardTitle>3. Cuánto le toca a cada quien</CardTitle>
+              <CardTitle>{t.calculadora.pasoResultado}</CardTitle>
               <CardDescription>
                 {gastosCalculo.length > 0
-                  ? `Total del grupo: ${formatearMonto(total, moneda)}`
-                  : "Registra gastos para ver el resultado."}
+                  ? t.calculadora.totalDelGrupo(formatearMonto(total, moneda, localeUi))
+                  : t.calculadora.sinResultado}
               </CardDescription>
             </div>
             {gastos.length > 0 || participantes.length > 0 ? (
               <Button variant="ghost" size="sm" onClick={limpiarTodo}>
-                Empezar de nuevo
+                {t.calculadora.empezarDeNuevo}
               </Button>
             ) : null}
           </div>
@@ -379,20 +379,20 @@ export function Calculadora({
         <CardContent className="space-y-6">
           {gastosCalculo.length === 0 ? (
             <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Aquí va a aparecer el saldo de cada persona y la lista de pagos mínimos para quedar
-              a mano.
+              {t.calculadora.resultadoVacio}
             </p>
           ) : (
             <>
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Saldos</h3>
+                <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
+                  {t.calculadora.saldos}
+                </h3>
                 <TablaSaldos participantes={participantes} saldos={saldos} moneda={moneda} />
               </div>
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-muted-foreground">
-                  Quién le paga a quién ({transferencias.length}{" "}
-                  {transferencias.length === 1 ? "transferencia" : "transferencias"})
+                  {t.calculadora.quienPagaAQuien(transferencias.length)}
                 </h3>
                 <ListaTransferencias
                   participantes={participantes}
@@ -403,13 +403,17 @@ export function Calculadora({
 
               <div className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-medium">¿Guardar este grupo?</p>
+                  <p className="font-medium">{t.calculadora.guardarGrupo}</p>
                   <p className="text-sm text-muted-foreground">
-                    Crea una cuenta gratis y no pierdes nada de lo que ya llevas.
+                    {t.calculadora.guardarGrupoDetalle}
                   </p>
                 </div>
-                <Button nativeButton={false} render={<Link href="/registro" />} className="shrink-0">
-                  <Save className="size-4" /> Guardar e invitar
+                <Button
+                  nativeButton={false}
+                  render={<Link href={RUTAS.registro[idioma]} />}
+                  className="shrink-0"
+                >
+                  <Save className="size-4" /> {t.calculadora.guardarEInvitar}
                 </Button>
               </div>
             </>
@@ -421,6 +425,7 @@ export function Calculadora({
 }
 
 function FormularioParticipante({ onAgregar }: { onAgregar: (nombre: string) => void }) {
+  const t = useIdioma().t;
   const [nombre, setNombre] = React.useState("");
 
   function enviar(event: React.FormEvent) {
@@ -432,14 +437,14 @@ function FormularioParticipante({ onAgregar }: { onAgregar: (nombre: string) => 
   return (
     <form onSubmit={enviar} className="flex gap-2">
       <Input
-        placeholder="Nombre del integrante"
+        placeholder={t.calculadora.nombreIntegrante}
         value={nombre}
         onChange={(e) => setNombre(e.target.value)}
         onKeyDown={enviarConEnter}
         maxLength={80}
       />
       <Button type="submit" variant="outline" disabled={!nombre.trim()}>
-        <Plus className="size-4" /> Agregar
+        <Plus className="size-4" /> {t.calculadora.agregar}
       </Button>
     </form>
   );
@@ -454,6 +459,7 @@ function FormularioGasto({
   moneda: string;
   onAgregar: (gasto: GastoLocal) => void;
 }) {
+  const t = useIdioma().t;
   const [descripcion, setDescripcion] = React.useState("");
   const [monto, setMonto] = React.useState("");
   const [pagadores, setPagadores] = React.useState<Pagador[]>(
@@ -479,21 +485,21 @@ function FormularioGasto({
 
     const montoCentavos = aUnidadMenor(monto, moneda);
     if (montoCentavos === null || montoCentavos <= 0) {
-      toast.error("Escribe un monto válido mayor a cero.");
+      toast.error(t.calculadora.errorMonto);
       return;
     }
     if (!descripcion.trim()) {
-      toast.error("Describe el gasto (ej. 'Comida').");
+      toast.error(t.calculadora.errorDescripcion);
       return;
     }
     const resueltos = resolverPagadores(pagadoresValidos, montoCentavos);
     const revision = validarPagadores(montoCentavos, resueltos);
     if (!revision.ok) {
-      toast.error(revision.error);
+      toast.error(t.calculadora.errorPagadores[revision.motivo] ?? revision.error);
       return;
     }
     if (entreValido.length === 0) {
-      toast.error("Marca entre quiénes se divide.");
+      toast.error(t.calculadora.errorReparto);
       return;
     }
 
@@ -513,7 +519,7 @@ function FormularioGasto({
     <form onSubmit={enviar} className="space-y-3 rounded-xl border bg-muted/30 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
         <Input
-          placeholder="¿En qué se gastó? Ej. Refrescos"
+          placeholder={t.calculadora.queSeGasto}
           value={descripcion}
           onChange={(e) => setDescripcion(e.target.value)}
           onKeyDown={enviarConEnter}
@@ -539,7 +545,7 @@ function FormularioGasto({
 
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-muted-foreground">
-          Se divide entre ({entreValido.length})
+          {t.calculadora.seDivideEntre(entreValido.length)}
         </label>
         <div className="flex flex-wrap gap-2">
           {participantes.map((p) => {
@@ -564,7 +570,7 @@ function FormularioGasto({
       </div>
 
       <Button type="submit" className="w-full">
-        <Plus className="size-4" /> Agregar gasto
+        <Plus className="size-4" /> {t.calculadora.agregarGasto}
       </Button>
     </form>
   );

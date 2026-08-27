@@ -7,6 +7,7 @@ import { useFormStatus } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDiccionario } from "@/lib/i18n/cliente";
 import {
   cancelarRegistroAction,
   reenviarCodigoRegistroAction,
@@ -46,6 +47,7 @@ function Aviso({ mensaje, tono }: { mensaje: string; tono: "error" | "info" }) {
 }
 
 export function FormularioRegistro() {
+  const t = useDiccionario();
   const router = useRouter();
   const [verPassword, setVerPassword] = useState(false);
 
@@ -79,10 +81,9 @@ export function FormularioRegistro() {
         <div className="flex items-start gap-3 rounded-xl border bg-muted/40 p-3">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 text-sm">
-            <p className="font-medium">Confirma tu correo</p>
+            <p className="font-medium">{t.registro.confirmaCorreo}</p>
             <p className="text-muted-foreground text-pretty">
-              Mandamos un código de 6 dígitos{correo ? ` a ${correo}` : ""}. Tu cuenta se crea al
-              confirmarlo.
+              {t.registro.codigoEnviado(correo ?? null)}
             </p>
           </div>
         </div>
@@ -90,7 +91,7 @@ export function FormularioRegistro() {
         <form action={accionCodigo} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="codigo-registro" className="text-sm font-medium">
-              Código de verificación
+              {t.login.codigoVerificacion}
             </label>
             <Input
               ref={campoCodigo}
@@ -113,7 +114,7 @@ export function FormularioRegistro() {
             />
           ) : null}
 
-          <BotonEnvio etiqueta="Crear mi cuenta" cargando="Verificando..." />
+          <BotonEnvio etiqueta={t.registro.crearMiCuenta} cargando={t.login.verificando} />
         </form>
 
         <div className="flex items-center justify-between gap-2 text-sm">
@@ -123,7 +124,7 @@ export function FormularioRegistro() {
               onClick={() => router.refresh()}
               className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              <ArrowLeft className="size-3.5" /> Usar otro correo
+              <ArrowLeft className="size-3.5" /> {t.registro.usarOtroCorreo}
             </button>
           </form>
 
@@ -132,7 +133,7 @@ export function FormularioRegistro() {
               type="submit"
               className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              Reenviar código
+              {t.login.reenviarCodigo}
             </button>
           </form>
         </div>
@@ -144,7 +145,7 @@ export function FormularioRegistro() {
     <form action={accionAlta} className="space-y-4">
       <div className="space-y-1.5">
         <label htmlFor="nombre" className="text-sm font-medium">
-          Tu nombre
+          {t.registro.tuNombre}
         </label>
         <div className="relative">
           <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -152,7 +153,7 @@ export function FormularioRegistro() {
             id="nombre"
             name="nombre"
             autoComplete="name"
-            placeholder="Ana Ramírez"
+            placeholder={t.registro.nombrePlaceholder}
             required
             maxLength={100}
             className="h-11 rounded-xl pl-9"
@@ -162,7 +163,7 @@ export function FormularioRegistro() {
 
       <div className="space-y-1.5">
         <label htmlFor="email" className="text-sm font-medium">
-          Correo
+          {t.registro.correo}
         </label>
         <div className="relative">
           <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -171,19 +172,17 @@ export function FormularioRegistro() {
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="tu-correo@dominio.com"
+            placeholder={t.registro.correoPlaceholder}
             required
             className="h-11 rounded-xl pl-9"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          Te mandaremos un código para confirmar que es tuyo.
-        </p>
+        <p className="text-xs text-muted-foreground">{t.registro.correoAyuda}</p>
       </div>
 
       <div className="space-y-1.5">
         <label htmlFor="contrasena" className="text-sm font-medium">
-          Contraseña
+          {t.registro.contrasena}
         </label>
         <div className="relative">
           <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -194,13 +193,13 @@ export function FormularioRegistro() {
             autoComplete="new-password"
             required
             minLength={8}
-            placeholder="Mínimo 8 caracteres"
+            placeholder={t.registro.contrasenaPlaceholder}
             className="h-11 rounded-xl pr-10 pl-9"
           />
           <button
             type="button"
             onClick={() => setVerPassword((v) => !v)}
-            aria-label={verPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-label={verPassword ? t.login.ocultarContrasena : t.login.mostrarContrasena}
             className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             {verPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -212,7 +211,10 @@ export function FormularioRegistro() {
         <Aviso mensaje={estadoAlta.message} tono="error" />
       ) : null}
 
-      <BotonEnvio etiqueta="Crear cuenta gratis" cargando="Enviando código..." />
+      <BotonEnvio
+        etiqueta={t.registro.crearCuentaGratis}
+        cargando={t.registro.enviandoCodigo}
+      />
     </form>
   );
 }

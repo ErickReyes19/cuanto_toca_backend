@@ -8,6 +8,7 @@ import { useFormStatus } from "react-dom";
 import { saveLoginTasksToast } from "@/components/login-tasks-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useDiccionario } from "@/lib/i18n/cliente";
 import {
   cancelarCodigoAction,
   loginWithCredentialsAction,
@@ -47,6 +48,7 @@ function Aviso({ mensaje, tono }: { mensaje: string; tono: "error" | "info" }) {
 }
 
 export default function Login() {
+  const t = useDiccionario();
   const router = useRouter();
   const [verPassword, setVerPassword] = useState(false);
 
@@ -85,9 +87,9 @@ export default function Login() {
         <div className="flex items-start gap-3 rounded-xl border bg-muted/40 p-3">
           <MailCheck className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
           <div className="min-w-0 text-sm">
-            <p className="font-medium">Revisa tu correo</p>
+            <p className="font-medium">{t.login.revisaCorreo}</p>
             <p className="text-muted-foreground text-pretty">
-              Mandamos un código de 6 dígitos{correo ? ` a ${correo}` : ""}. Caduca en 10 minutos.
+              {t.login.codigoEnviado(correo ?? null)}
             </p>
           </div>
         </div>
@@ -95,7 +97,7 @@ export default function Login() {
         <form action={accionCodigo} className="space-y-4">
           <div className="space-y-1.5">
             <label htmlFor="codigo" className="text-sm font-medium">
-              Código de verificación
+              {t.login.codigoVerificacion}
             </label>
             <Input
               ref={campoCodigo}
@@ -118,7 +120,7 @@ export default function Login() {
             />
           ) : null}
 
-          <BotonEnvio etiqueta="Entrar" cargando="Verificando..." />
+          <BotonEnvio etiqueta={t.login.entrar} cargando={t.login.verificando} />
         </form>
 
         <div className="flex items-center justify-between gap-2 text-sm">
@@ -128,7 +130,7 @@ export default function Login() {
               onClick={() => router.refresh()}
               className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              <ArrowLeft className="size-3.5" /> Usar otra cuenta
+              <ArrowLeft className="size-3.5" /> {t.login.usarOtraCuenta}
             </button>
           </form>
 
@@ -137,7 +139,7 @@ export default function Login() {
               type="submit"
               className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
-              Reenviar código
+              {t.login.reenviarCodigo}
             </button>
           </form>
         </div>
@@ -149,7 +151,7 @@ export default function Login() {
     <form action={accionLogin} className="space-y-4">
       <div className="space-y-1.5">
         <label htmlFor="identifier" className="text-sm font-medium">
-          Usuario o correo
+          {t.login.usuarioOCorreo}
         </label>
         <div className="relative">
           <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -157,7 +159,7 @@ export default function Login() {
             id="identifier"
             name="identifier"
             autoComplete="username"
-            placeholder="tu_usuario o tu-correo@dominio.com"
+            placeholder={t.login.usuarioPlaceholder}
             required
             className="h-11 rounded-xl pl-9"
           />
@@ -166,7 +168,7 @@ export default function Login() {
 
       <div className="space-y-1.5">
         <label htmlFor="contrasena" className="text-sm font-medium">
-          Contraseña
+          {t.login.contrasena}
         </label>
         <div className="relative">
           <KeyRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -175,14 +177,14 @@ export default function Login() {
             name="contrasena"
             type={verPassword ? "text" : "password"}
             autoComplete="current-password"
-            placeholder="Tu contraseña"
+            placeholder={t.login.contrasenaPlaceholder}
             required
             className="h-11 rounded-xl pr-10 pl-9"
           />
           <button
             type="button"
             onClick={() => setVerPassword((v) => !v)}
-            aria-label={verPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-label={verPassword ? t.login.ocultarContrasena : t.login.mostrarContrasena}
             className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
           >
             {verPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -194,7 +196,7 @@ export default function Login() {
         <Aviso mensaje={estadoLogin.message} tono={estadoLogin.ok ? "info" : "error"} />
       ) : null}
 
-      <BotonEnvio etiqueta="Entrar" cargando="Entrando..." />
+      <BotonEnvio etiqueta={t.login.entrar} cargando={t.login.entrando} />
     </form>
   );
 }
