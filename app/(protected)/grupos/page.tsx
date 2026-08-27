@@ -1,4 +1,4 @@
-import { Home, MapPinned, Receipt, Users } from "lucide-react";
+import { Receipt, Users } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatearMonto } from "@/lib/split/moneda";
 import { obtenerGrupos } from "./actions";
 import { CrearGrupo } from "./components/crear-grupo";
+import { BotonEliminarGrupo } from "./components/boton-eliminar-grupo";
 import { ImportarBorrador } from "./components/importar-borrador";
 
 export default async function GruposPage() {
@@ -45,27 +46,29 @@ export default async function GruposPage() {
         <ul className="space-y-2">
           {grupos.map((grupo) => (
             <li key={grupo.id}>
-              <Link
-                href={`/grupos/${grupo.id}`}
-                className="flex items-center gap-3 rounded-xl border p-4 transition hover:bg-muted/40"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-medium">{grupo.nombre}</p>
-                    {grupo.esPropietario ? (
-                      <Badge variant="secondary" className="shrink-0 text-[10px]">
-                        Tuyo
-                      </Badge>
-                    ) : null}
+              <div className="flex items-center gap-3 rounded-xl border p-4 transition hover:bg-muted/40">
+                <Link href={`/grupos/${grupo.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">{grupo.nombre}</p>
+                      {grupo.esPropietario ? (
+                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                          Tuyo
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {grupo.tipo === "DESPENSA_FAMILIAR" ? "Despensa familiar" : "Viajes y reuniones"} · {grupo.totalParticipantes} integrantes · {grupo.totalGastos} gastos
+                    </p>
                   </div>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {grupo.tipo === "DESPENSA_FAMILIAR" ? "Despensa familiar" : "Viajes y reuniones"} · {grupo.totalParticipantes} integrantes · {grupo.totalGastos} gastos
-                  </p>
-                </div>
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {formatearMonto(grupo.totalCentavos, grupo.moneda)}
-                </span>
-              </Link>
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {formatearMonto(grupo.totalCentavos, grupo.moneda)}
+                  </span>
+                </Link>
+                {grupo.esPropietario ? (
+                  <BotonEliminarGrupo grupoId={grupo.id} nombre={grupo.nombre} />
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

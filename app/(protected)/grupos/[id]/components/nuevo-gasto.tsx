@@ -115,6 +115,10 @@ export function NuevoGasto({
       setDescripcion("");
       setMonto("");
       setValores({});
+      // Conserva a quienes participaron en el pago, pero nunca arrastra sus
+      // aportes al siguiente gasto. Esto es especialmente importante cuando
+      // pagaron varias personas.
+      setPagadores((actual) => actual.map((pagador) => ({ ...pagador, montoCentavos: 0 })));
       toast.success("Gasto agregado.");
       router.refresh();
     } catch (error) {
@@ -125,8 +129,6 @@ export function NuevoGasto({
   }
 
   const modoActual = MODOS.find((m) => m.valor === tipoReparto)!;
-  // Base UI muestra el valor crudo (el id) si no recibe el mapa de etiquetas.
-  const etiquetasParticipantes = Object.fromEntries(participantes.map((p) => [p.id, p.nombre]));
   const etiquetasCategorias = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]));
 
   return (

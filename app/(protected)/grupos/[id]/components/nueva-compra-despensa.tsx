@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { aUnidadMenor, formatearMonto, getMoneda } from "@/lib/split/moneda";
 import {
   SelectorPagadores,
@@ -29,7 +28,6 @@ export function NuevaCompraDespensa({ grupoId, moneda, participantes }: { grupoI
   );
   const [lineas, setLineas] = React.useState<Linea[]>(() => [nuevaLinea(participantes.map((p) => p.id))]);
   const [enviando, setEnviando] = React.useState(false);
-  const etiquetas = Object.fromEntries(participantes.map((p) => [p.id, p.nombre]));
   const decimales = getMoneda(moneda).decimales;
   const total = lineas.reduce((suma, linea) => suma + (aUnidadMenor(linea.monto, moneda) ?? 0), 0);
 
@@ -59,7 +57,10 @@ export function NuevaCompraDespensa({ grupoId, moneda, participantes }: { grupoI
         pagadores: resolverPagadores(pagadores, total),
         lineas: payload,
       });
-      setDescripcion("Compra de supermercado"); setLineas([nuevaLinea(participantes.map((p) => p.id))]);
+      setDescripcion("Compra de supermercado");
+      setLineas([nuevaLinea(participantes.map((p) => p.id))]);
+      // No reutilizar los montos aportados por varias personas en el próximo ticket.
+      setPagadores((actual) => actual.map((pagador) => ({ ...pagador, montoCentavos: 0 })));
       toast.success("Ticket guardado y repartido automáticamente.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "No se pudo guardar el ticket."); }
     finally { setEnviando(false); }
