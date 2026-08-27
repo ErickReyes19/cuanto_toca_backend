@@ -115,9 +115,9 @@ export function SelectorPagadores({
                   aria-label={`Cuánto puso ${persona?.nombre ?? ""}`}
                   inputMode="decimal"
                   placeholder={decimales ? "0.00" : "0"}
-                  defaultValue={
+                  value={
                     pagador.montoCentavos
-                      ? (pagador.montoCentavos / 10 ** decimales).toFixed(decimales)
+                      ? formatearMontoSinSimbolo(pagador.montoCentavos, decimales)
                       : ""
                   }
                   onChange={(e) => actualizarMonto(pagador.participanteId, e.target.value)}
@@ -145,6 +145,11 @@ export function SelectorPagadores({
       )}
     </div>
   );
+}
+
+/** Mantiene los inputs sincronizados cuando el formulario se reinicia. */
+function formatearMontoSinSimbolo(montoCentavos: number, decimales: number): string {
+  return (montoCentavos / 10 ** decimales).toFixed(decimales);
 }
 
 /**

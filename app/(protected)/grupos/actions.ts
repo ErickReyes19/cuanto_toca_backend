@@ -219,6 +219,21 @@ export async function archivarGrupo(grupoId: string) {
   revalidatePath("/grupos");
 }
 
+/** El propietario puede eliminar el grupo y todos sus movimientos asociados. */
+export async function eliminarGrupo(grupoId: string) {
+  const session = await requerirSesion();
+  const grupo = await prisma.grupo.findFirst({
+    where: { id: grupoId, propietarioId: session.IdUser },
+    select: { id: true },
+  });
+  if (!grupo) throw new Error("Solo quien creó el grupo puede eliminarlo.");
+
+  // Las relaciones del esquema usan onDelete: Cascade, por lo que no quedan
+  // pagos, gastos, repartos ni participantes huérfanos.
+  await prisma.grupo.delete({ where: { id: grupoId } });
+  revalidatePath("/grupos");
+}
+
 // ------------------------------------------------------------------
 // PARTICIPANTES E INVITACION
 // ------------------------------------------------------------------
